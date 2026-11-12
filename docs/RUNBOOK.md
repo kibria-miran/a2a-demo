@@ -29,7 +29,10 @@ make all               # pytest (fast + slow)
 - Phase 0.5: pinned in `docs/A2A_PIN.md`. The wire uses A2A 1.0 names:
   `SendMessage`, `GetTask`, `CancelTask`, `TASK_STATE_*`, `ROLE_*`, no
   `kind` discriminator. Internal names stay short.
-- Phase 1 starts only after `pytest -m fast` passes.
+- Phase 1: wire models, state machine, utility/negotiator, SQLite store with
+  the CAS commit, seller server, client, buyer CLI and fallback-only agents.
+  Gate: `pytest -m fast` is 189 tests in ~4 s; S1 completes with a verified
+  artifact; S2 ends `rejected` with no artifact; both report zero LLM calls.
 
 ## Trap doors
 
@@ -51,6 +54,11 @@ One writer transaction per step; WAL in the slow tier / production;
 
 ### Slow test monkeypatch does nothing
 The seller is a subprocess. Use `tests/fake_nim_server.py` (E-37).
+
+### A second message blocks instead of getting R8/R6d
+The per-task (or creation) lock is being held across `await` of the turn.
+Commit R14 and spawn the turn under the lock, then release it and await the
+turn outside. Concurrent requests must see `working` immediately.
 
 ### Replay returns an error instead of the task
 R6b must return the current Task, not an error.
