@@ -59,10 +59,13 @@ persisted so replaying a messageId never runs a duplicate turn (D-8, D-16).
 ## Trace
 
 Every message and turn lifecycle event is appended to `logs/trace.jsonl`
-(one JSON line per event):
+(one JSON line per event). Verbatim excerpt from a completed negotiation
+(fallback mode, `t0 = 2026-11-12T18:43:17`):
 
 ```json
-{"ts":"2026-11-12T17:57:16Z","agent":"seller","round":1,"direction":"out","kind":"counter","severity":"info","task_id":"…","terms":{"price":1130,"delivery_days":19,"revisions":1},"own_U":0.89,"target_U":0.89,"source":"fallback"}
+{"ts":"2026-11-12T18:43:17.861997+00:00","agent":"seller","round":0,"direction":"in","kind":"offer","severity":"info","task_id":"c3145a38-23a7-41ae-bbec-72640e6f82ae","terms":{"price":680,"delivery_days":7,"revisions":5}}
+{"ts":"2026-11-12T18:43:17.907120+00:00","agent":"seller","round":1,"direction":"out","kind":"counter","severity":"info","task_id":"c3145a38-23a7-41ae-bbec-72640e6f82ae","terms":{"price":1130,"delivery_days":19,"revisions":1},"own_U":0.89,"target_U":0.89,"source":"fallback"}
+{"ts":"2026-11-12T18:43:17.909229+00:00","agent":"buyer","round":0,"direction":"out","kind":"offer","severity":"info","task_id":"c3145a38-23a7-41ae-bbec-72640e6f82ae","terms":{"price":680,"delivery_days":7,"revisions":5},"own_U":0.9,"source":"fallback"}
 ```
 
 `own_U` / `target_U` are quantized to 2 decimals, and the full concession
