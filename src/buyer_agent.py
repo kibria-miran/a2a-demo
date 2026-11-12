@@ -228,27 +228,28 @@ def next_move(
         )
 
     if attempt is not None:
-        retry_reason: str | None = None
+        attempt_reason: str | None = None
         for _ in range(config.LLM_RETRY_ATTEMPTS + 1):
             try:
-                proposal = attempt(retry_reason)
+                proposal = attempt(attempt_reason)
             except llm.LLMError:
                 proposal = None
-                retry_reason = llm.REASON_LLM_ERROR
+                attempt_reason = llm.REASON_LLM_ERROR
                 continue
             proposal_terms, reason = _valid_proposal(
                 proposal, profile, response_round, history
             )
             if proposal_terms is not None:
+                rationale = proposal.get("rationale", "") if proposal else ""
                 return Decision(
                     kind="offer",
                     terms=proposal_terms,
-                    rationale=str(proposal.get("rationale", "")),
+                    rationale=str(rationale),
                     round=response_round,
                     own_u=profile.utility(proposal_terms),
                     source="llm",
                 )
-            retry_reason = reason
+            attempt_reason = reason
 
     fallback = fallback_offer(profile, response_round, history)
     return Decision(
