@@ -107,6 +107,35 @@ docs/           A2A_PIN.md (spec freeze), DESIGN_NOTES.md, RUNBOOK.md
 profiles/       private buyer/seller profiles (never on the wire)
 ```
 
+## Definition of Done (vs the frozen plan, section 16)
+
+| Item | State | Evidence |
+|---|---|---|
+| docs/A2A_PIN.md exists; diff logged "v2.2: A2A pin" | ✓ | `docs/A2A_PIN.md`, `docs/DESIGN_NOTES.md` ("v2.2: A2A pin") |
+| test_smoke asserts E-56 factory/FakeLLM semantics before test_server | ✓ | `tests/test_smoke.py` (factory, FakeLLM semantics, inject_clock, loopback) |
+| Fallback ≤ EPS_ROUNDING of target, all rounds, both profiles; E-54 covered | ✓ | `test_negotiator.py::test_fallback_within_eps_and_monotone_all_rounds[buyer/seller]`, `test_empty_history_skips_monotone_filter` |
+| Full negotiation, NO LLM (S1, S2); pytest -m fast < 10 s | ✓ | `test_server.py::test_s1_...`, `test_s2_...` (229 fast tests in ~6 s) |
+| LLM proposer both sides | ✓ | `tests/test_llm_e2e.py` (both agents, `source=="llm"`, task completes) |
+| Every T1–T8 and R0–R14 (incl R4b, R6a–R6d), G1–G3, C1–C5 row tested | ✓ | `test_state_machine.py`, `test_server.py` (R0–R14/G/C parametrized + named) |
+| Round semantics end-to-end (S1 round symmetry) | ✓ | `test_server.py::test_s1_...` asserts `0,2,4,6` (buyer) / `1,3,5,7` (seller) |
+| Restart mid-task resumes (S9) | ✓ | `test_slow.py::test_s9_kill9_midturn_restart_resumes`, `test_resume.py` |
+| Replay never runs a second turn (S7, S10) | ✓ | `test_server.py::test_r6b_...`, `S10a/S10b` both tiers, `test_regression.py::test_replay_...` |
+| Cancel during a running turn never overwritten (S18) | ✓ | `S10`/`S18`-class tests, `test_regression.py::test_late_llm_answer_discarded_after_cancel` |
+| A NIM outage is a normal failure; retry once; fallback (E-50) | ✓ | `test_llm.py`, `test_negotiator.py::two_invalid_proposals_fall_back`, fallback-only shell run verified |
+| Agreement hash verified on every completed task | ✓ | `test_server.py::test_s1_...` asserts artifact pre/post the negotiation |
+| Trace: severity + error_kind, quantized U, no own_history (E-35, E-51) | ✓ | `test_trace.py::test_*`, `test_security.py::test_s5_...`, `test_llm_e2e.py` token assertions |
+| round_at_turn_start NULL on idle task; test passes | ✓ | `test_store.py::test_round_at_turn_start_is_null_when_idle` |
+| CAS +2 on counter, +0 on accept/walk_away | ✓ | `test_store.py::test_cas_round_advance_plus_two`, `test_cas_accept_and_walk_away_do_not_advance_round` |
+| S19 injected row sets round_at_turn_start; drifted round → RESUME_DRIFT | ✓ | `test_server.py::test_r6c_resume_drift_is_rejected`, `tests/test_resume.py`, `test_regression.py::test_resume_drift_is_rejected_with_32602` |
+| X1–X6 saved in evals/results; summarized here | ~ X1/X4/X6 saved (offline); X2/X3/X5 live-only, pending NIM key | `evals/results/*.jsonl` (gitignored), this file |
+| pytest zero network (except -m live); test_fast_tier_no_network.py enforces | ✓ | `conftest.py::_no_real_network`, `tests/test_fast_tier_no_network.py` |
+| `make check` passes | ✓ | 229 fast + ruff + mypy, ~6 s |
+| README, RUNBOOK, DESIGN_NOTES, A2A_PIN current | ✓ | this file; `docs/*` |
+| Every §15 entry has a test_regression.py guard + runbook section | ✓ | `tests/test_regression.py` (12 tests, one per promoted bug); RUNBOOK "Section 15 promotions" |
+
+Open items pending a NVIDIA NIM key (not in this environment):
+- X2 LLM-vs-fallback, X3 rationale on/off, X5 per-side models — `--mode live` is implemented and ready to run (`.venv/bin/python evals/run_evals.py --experiment x2 --mode live --runs 20`).
+
 ## Status & known limitations
 
 Working: full wire protocol (offer/counter/accept/walk_away), idempotency,
