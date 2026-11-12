@@ -124,6 +124,7 @@ async def negotiate(
     initial_view: dict[str, Any] | None = None,
     buyer_store: BuyerStore | None = None,
     url: str | None = None,
+    chat: Any | None = None,
 ) -> dict[str, Any]:
     agent_name = profile.name
     await client.fetch_card()
@@ -149,7 +150,7 @@ async def negotiate(
             buyer_store.clear(url, final_task_id)
 
     for _ in range(max_steps):
-        decision = next_move(view, profile)
+        decision = next_move(view, profile, chat=chat)
 
         if decision.kind in {"complete"}:
             result = verify_completed(view, profile)

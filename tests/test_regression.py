@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from tests.conftest import loopback_client, make_message
 
-from src import config, protocol
+from src import config, protocol, trace
 from src.decision import Decision
 from src.server import create_app
 from src.store import Store
@@ -178,6 +178,77 @@ def test_replay_of_accept_returns_the_completed_task(tmp_path: Any) -> None:
         asyncio.run(run())
     finally:
         store.close()
+
+
+def test_turn_crash_sets_failed(tmp_path: Any) -> None:
+    """A crashing turn must CAS-commit `failed` (E-22).
+
+    Regression guard for the class of bugs where a responder raising
+    leaves the task stuck in `working`.
+    """
+
+    def exploding(
+        view: dict[str, Any],
+        incoming: dict[str, Any],
+        profile: Profile,
+        own_history: list[float],
+    ) -> Any:
+        raise ValueError("boom")
+
+    trace_path = tmp_path / "trace.jsonl"
+    trace.configure(trace_path)
+    store = Store(str(tmp_path / "seller.db"), journal_mode="MEMORY")
+    app = create_app(
+        store,
+        load_profile("seller"),
+        responder=exploding,
+        card_url="http://testserver",
+    )
+    try:
+        message = make_message(
+            messageId="crash-offer-1",
+            parts=[
+                protocol.data_part(
+                    {
+                        "type": "offer",
+                        "terms": {"price": 800, "delivery_days": 14, "revisions": 3},
+                        "round": 0,
+                    }
+                )
+            ],
+        )
+
+        async def run() -> dict[str, Any]:
+            async with loopback_client(app) as http:
+                return await _send(
+                    http,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "SendMessage",
+                        "params": {"message": message},
+                    },
+                )
+
+        import asyncio
+
+        body = asyncio.run(run())
+    finally:
+        store.close()
+        trace.reset()
+
+    assert body["result"]["task"]["status"]["state"] == "TASK_STATE_FAILED"
+    events = [
+        json.loads(line)
+        for line in trace_path.read_text().splitlines()
+        if line.strip()
+    ]
+    assert any(
+        event.get("kind") == "turn_failed"
+        and event.get("severity") == "error"
+        and event.get("error_kind") == "turn_failed"
+        for event in events
+    )
 
 
 def test_sync_responder_does_not_block_event_loop(tmp_path: Any) -> None:

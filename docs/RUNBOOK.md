@@ -84,8 +84,11 @@ the absence of private digits in the prompt.
   message byte-identically (E-33) and clears the row on terminal outcomes.
   Peer text now reaches the responder on normal turns too (regression:
   `test_peer_text_reaches_responder_on_normal_turn`).
-  Remaining for full Phase 4/5/6: slow-tier fake NIM + S9/S10/S14,
-  eval runner, README + DoD sweep.
+  Remaining for full Phase 6: eval runner exists, and the README now
+  summarizes the offline X1/X4/X6 results (agreements 1.00 by construction
+  on the lattice fallback). X2/X3/X5 stay `--mode live` (need a NIM key).
+  `tests/test_llm_e2e.py` now covers a full negotiation with the LLM
+  proposer on both sides (source == "llm" in all outbound trace events).
 - Phase 6 (partial): slow tier exists. `tests/fake_nim_server.py` — real
   HTTP fake of the NIM chat API (`/__stage`, `/__control`, `/__reset`,
   `/__state`, port printed to stdout). `tests/test_slow.py` — S9

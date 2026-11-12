@@ -34,6 +34,36 @@ Diffs applied, restricted by E-55 to `src/config.py`, `src/protocol.py`
 No other plan section was revised during the pin. The spec is frozen at the
 hash recorded in `docs/A2A_PIN.md`; do not re-read it during the build.
 
+## Post-freeze implementation notes (2026-11)
+
+Decisions and bugs fixed after the v2.2 freeze, logged here per the changelog
+convention (C3). Frozen sections (method names, decision tables, state
+machine, round bookkeeping) were NOT revised; these are implementation
+corrections only:
+
+- R11 (buyer accept) now stores the incoming user message in the same
+  transaction as task completion. R6b replay of an accept returns the
+  completed task (D-8). Previously accepts left no user-row trail and
+  replay fell through to R7.
+- The turn is spawned via `asyncio.to_thread(responder, ...)`:
+  `llm.chat()` is synchronous; the event loop was being monopolized by
+  the proposer (starving `tasks/get`/`tasks/cancel`/`BLOCKING_TIMEOUT`),
+  violating E-4's premise.
+- `main_seller` passes `llm.default_chat()` (None => fallback-only
+  mode); an app built without `chat=` would silently never call the LLM.
+- Peer text part reaches the responder on normal turns (it was previously
+  attached only on the resume path).
+- Buyer `--resume` resends the stored `last_message_json` byte-identically
+  (E-33); the buyer DB adds `resume_state`.
+- Round symmetry: the CAS commit advances `tasks.round` by exactly 2 on a
+  counter (E-47) — implementation conforms; guarded by
+  `test_cas_round_advance_plus_two` and the S1 test.
+- In `test_llm_e2e.py` both agents negotiate LLM-vs-LLM on a scripted
+  FakeLLM; the negotiation completes and `source == "llm"` for all
+  outbound agent messages (no fallback consumed).
+- Live evaluations (X2/X3/X5) are not runnable without a NIM key; offline
+  lattice runs are deterministic and 100% agreement by construction.
+
 ## NOT ADOPTED (from v2.2)
 
 Full reasoning lives here as decisions are revisited. Summary:
