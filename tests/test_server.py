@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from tests.conftest import loopback_client, make_message
 
-from src import config, protocol
+from src import config, protocol, seller_agent
 from src.buyer_cli import negotiate
 from src.client import A2AClient
 from src.server import create_app
@@ -519,6 +519,194 @@ async def test_c4_terminal_task_is_not_cancelable(http) -> None:
     )
     body = await rpc(http, config.A2A_METHOD_CANCEL_TASK, {"id": task["id"]})
     assert error_code(body) == config.A2A_TASK_NOT_CANCELABLE
+
+
+# ---------------------------------------------------------------------------
+# S3 / S10 / S14-lite: cancel and concurrency
+# ---------------------------------------------------------------------------
+
+
+async def test_s3_buyer_cancels_at_round_three(http) -> None:
+    task, _ = await first_exchange(http)
+    await send(http, offer(2, message_id="round-2", task_id=task["id"]))
+
+    canceled = await rpc(http, config.A2A_METHOD_CANCEL_TASK, {"id": task["id"]})
+    assert canceled["result"]["status"]["state"] == "TASK_STATE_CANCELED"
+
+    further = await send(http, offer(4, message_id="after-cancel", task_id=task["id"]))
+    assert error_code(further) == config.JSONRPC_INVALID_PARAMS
+
+    again = await rpc(http, config.A2A_METHOD_CANCEL_TASK, {"id": task["id"]})
+    assert again["result"]["status"]["state"] == "TASK_STATE_CANCELED"
+
+
+async def _blocking_env(tmp_path, calls: list[int], entered, release):
+    store = Store(str(tmp_path / "race.db"), journal_mode="MEMORY")
+    profile = load_profile("seller")
+
+    async def responder(view, incoming, seller_profile, history):
+        calls.append(1)
+        entered.set()
+        await release.wait()
+        return seller_agent.respond(view, incoming, seller_profile, history)
+
+    app = create_app(
+        store, profile, responder=responder, card_url="http://testserver"
+    )
+    return store, app
+
+
+async def test_cancel_during_first_turn_discards_the_result(tmp_path) -> None:
+    calls: list[int] = []
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    store, app = await _blocking_env(tmp_path, calls, entered, release)
+    try:
+        async with loopback_client(app) as http:
+            send_task = asyncio.create_task(
+                send(http, offer(0, message_id="cancel-first"))
+            )
+            await asyncio.wait_for(entered.wait(), timeout=1)
+            row = store.conn.execute("SELECT id FROM tasks").fetchone()
+            task_id = row["id"]
+
+            canceled = await rpc(
+                http, config.A2A_METHOD_CANCEL_TASK, {"id": task_id}
+            )
+            assert canceled["result"]["status"]["state"] == "TASK_STATE_CANCELED"
+
+            release.set()
+            body = await asyncio.wait_for(send_task, timeout=1)
+            assert body["result"]["task"]["status"]["state"] == "TASK_STATE_CANCELED"
+            assert store.last_message(task_id, "agent") is None
+            assert store.get_task(task_id)["round"] == 0
+            assert len(calls) == 1
+    finally:
+        store.close()
+
+
+async def test_s10a_same_message_id_runs_exactly_one_turn(tmp_path) -> None:
+    calls: list[int] = []
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    store, app = await _blocking_env(tmp_path, calls, entered, release)
+    try:
+        async with loopback_client(app) as http:
+            first = asyncio.create_task(
+                send(http, offer(0, message_id="same-race"))
+            )
+            await asyncio.wait_for(entered.wait(), timeout=1)
+
+            second = await asyncio.wait_for(
+                send(http, offer(0, message_id="same-race")), timeout=1
+            )
+            assert error_code(second) == config.JSONRPC_INVALID_PARAMS
+            assert second["error"]["message"] in {
+                config.REASONS["R6D"],
+                config.REASONS["R4"],
+            }
+
+            release.set()
+            body = await asyncio.wait_for(first, timeout=1)
+            task = body["result"]["task"]
+            assert task["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
+            assert [m["role"] for m in task["history"]] == [
+                "ROLE_USER",
+                "ROLE_AGENT",
+            ]
+            assert len(calls) == 1
+            assert store.get_task(task["id"])["round"] == 2
+    finally:
+        store.close()
+
+
+async def test_s10b_different_message_ids_while_turn_runs_get_r8(tmp_path) -> None:
+    calls: list[int] = []
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    store, app = await _blocking_env(tmp_path, calls, entered, release)
+    try:
+        async with loopback_client(app) as http:
+            first = asyncio.create_task(
+                send(http, offer(0, message_id="first"))
+            )
+            await asyncio.wait_for(entered.wait(), timeout=1)
+            row = store.conn.execute("SELECT id FROM tasks").fetchone()
+            task_id = row["id"]
+
+            second = await send(
+                http, offer(0, message_id="second", task_id=task_id)
+            )
+            assert second["error"]["message"] == config.REASONS["R8"]
+
+            release.set()
+            body = await asyncio.wait_for(first, timeout=1)
+            task = body["result"]["task"]
+            assert task["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
+            assert len(task["history"]) == 2
+            assert len(calls) == 1
+            assert store.get_task(task_id)["state"] == "input-required"
+    finally:
+        store.close()
+
+
+async def test_first_message_timeout_still_yields_a_task_id(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(config, "BLOCKING_TIMEOUT", 0.01)
+    calls: list[int] = []
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    store, app = await _blocking_env(tmp_path, calls, entered, release)
+    try:
+        async with loopback_client(app) as http:
+            pending = asyncio.create_task(
+                send(http, offer(0, message_id="slow-first"))
+            )
+            await asyncio.wait_for(entered.wait(), timeout=1)
+
+            # E-26/E-49: the HTTP reply must already carry the committed task id.
+            body = await asyncio.wait_for(pending, timeout=1)
+            task = body["result"]["task"]
+            assert task["id"]
+            assert task["status"]["state"] == "TASK_STATE_WORKING"
+
+            release.set()
+            for _ in range(100):
+                if store.get_task(task["id"])["state"] != "working":
+                    break
+                await asyncio.sleep(0)
+            assert store.get_task(task["id"])["state"] == "input-required"
+            assert store.last_message(task["id"], "agent") is not None
+            assert len(calls) == 1
+    finally:
+        store.close()
+
+
+async def test_server_restart_recovers_and_resumes(tmp_path) -> None:
+    db = str(tmp_path / "restart.db")
+    store1 = Store(db, journal_mode="MEMORY")
+    task = store1.create_task()
+    store1.begin_turn(task["id"], "restart-msg", offer(0)["parts"])
+    store1.close()
+
+    store2 = Store(db, journal_mode="MEMORY")
+    app = create_app(
+        store2, load_profile("seller"), card_url="http://testserver"
+    )
+    try:
+        row = store2.get_task(task["id"])
+        assert row["state"] == "input-required"
+        assert row["round_at_turn_start"] == row["round"] == 0
+
+        async with loopback_client(app) as http:
+            body = await send(
+                http, offer(0, message_id="restart-msg", task_id=task["id"])
+            )
+            resumed = body["result"]["task"]
+            assert resumed["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
+            assert len([m for m in resumed["history"] if m["role"] == "ROLE_USER"]) == 1
+            assert store2.get_task(task["id"])["round"] == 2
+    finally:
+        store2.close()
 
 
 # ---------------------------------------------------------------------------

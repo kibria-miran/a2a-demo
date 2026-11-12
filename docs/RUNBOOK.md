@@ -31,8 +31,12 @@ make all               # pytest (fast + slow)
   `kind` discriminator. Internal names stay short.
 - Phase 1: wire models, state machine, utility/negotiator, SQLite store with
   the CAS commit, seller server, client, buyer CLI and fallback-only agents.
-  Gate: `pytest -m fast` is 189 tests in ~4 s; S1 completes with a verified
+  Gate: `pytest -m fast` is 195 tests in ~3 s; S1 completes with a verified
   artifact; S2 ends `rejected` with no artifact; both report zero LLM calls.
+- Phase 2a/2b: per-task and creation locks released before awaiting the turn,
+  R5-R14, replay/resume (R6a-R6d), G/C tables, CAS +2/+0 bookkeeping,
+  startup recovery, turn-failure commit, client retry, first-message-timeout
+  task id. S3, cancel-during-turn, S10a/S10b and restart-resume pass.
 
 ## Trap doors
 
