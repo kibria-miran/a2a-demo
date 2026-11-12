@@ -6,21 +6,15 @@ Protocol: a minimal subset of A2A (Agent2Agent), built by hand over
 JSON-RPC 2.0 + HTTP. Two independent agent processes negotiate a freelance
 Godot job (buyer vs seller). LLM proposes, code decides.
 
-STATUS: Spec is frozen at v2.2 final. Next action is code, in this order:
-  0. Phase 0.5: A2A spec pinning -> docs/A2A_PIN.md (E-55). Do NOT proceed
-     until A2A_PIN.md exists and any diff has been applied ONLY to
-     config.py, protocol.py and section 8.1, and logged in
-     docs/DESIGN_NOTES.md as "v2.2: A2A pin".
-  1. src/config.py (all frozen constants, REASONS dict) and src/clock.py
-  2. tests/conftest.py (FakeLLM, make_profile, make_offer, make_message,
-     make_task, inject_clock, loopback_client)
-  3. tests/test_smoke.py (imports conftest AND asserts factory + FakeLLM
-     semantics; see 6) -- must pass before test_server.py exists (D-12)
-  4. tests/test_config.py
-  5. tests/test_state_machine.py and tests/test_server.py, table-driven
-     from sections 8.4 and 8.5, one test per table row, BEFORE writing
-     server.py.
-No line of test_server.py is written until test_smoke.py passes (D-12).
+STATUS: Spec is frozen at v2.2 final. Phases done and committed: 0
+(skeleton, A2A pin, config, clock, conftest, smoke/config tests),
+0.5 (A2A pin -> docs/A2A_PIN.md, diff logged in docs/DESIGN_NOTES.md as
+"v2.2: A2A pin"), 1 (protocol, state machine, store/CAS, negotiator,
+server, client, fallback agents), 2 (locking, idempotency, CAS/resume,
+timeout and race coverage). `pytest -m fast` passes (195 tests, ~3 s).
+Next action: Phase 3 (LLM proposer, sections 8.10/8.6/8.3, Phase 3 of
+section 12), then buyer loop + trace (Phase 4), security (Phase 5),
+evals (Phase 6). S3+ are in scope from Phase 2/3.
 Do not revise this doc again until a test forces it. Design rationale and
 the NOT ADOPTED list live in docs/DESIGN_NOTES.md (C3), dev-loop commands
 in docs/RUNBOOK.md (C2). Standing rule (C3): every section 15 entry, at
