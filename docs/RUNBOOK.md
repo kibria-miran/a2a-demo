@@ -185,3 +185,27 @@ as the fix, per the standing rule.
   `test_c*` in `tests/test_server.py` and `tests/test_state_machine.py`.
 - "Fallback proposals break monotone" -> V4 validator;
   `tests/test_negotiator.py::test_fallback_within_eps_and_monotone_all_rounds`.
+
+- "Agent Card cached stale: restart the client" -> the client does not
+  cache the card; the seller ships it fresh per request; avoid long-lived
+  client processes against a re-configured seller (`fetch_card()` at the
+  start of each run).
+- "uvicorn --reload loses in-memory locks" -> dev only: run without
+  `--reload`; the per-task locks are process-local.
+- "S10a flakes under capacity load" -> use the MAX_OPEN_TASKS override and
+  accept server_busy (or R6d) as valid loser outcomes;
+  `tests/test_server.py::test_r4_capacity_and_r4b_concurrent_creators`.
+- "Fallback proposals break monotone" -> V4;
+  `tests/test_regression.py::test_fallback_stays_within_eps_of_target`.
+- "Replay runs a second turn" ->
+  `tests/test_regression.py::test_replay_never_reruns_finishing_turn`
+  (three identical sends produce identical tasks/history).
+- "Resume event traveler round drift" ->
+  `tests/test_regression.py::test_resume_drift_is_rejected_with_32602`
+  (drifted round_at_turn_start -> RESUME_DRIFT).
+- "Round symmetry off-by-one at counter" ->
+  `tests/test_regression.py::test_counter_advances_round_by_two_on_counter`
+  and `tests/test_store.py::test_cas_round_advance_plus_two`.
+- "Private number in outbound rationale" ->
+  `tests/test_regression.py::test_v5_private_value_leak_blocked` (V5) and
+  `tests/test_negotiator.py::test_v5_leak_phrase_and_exact_private_value`.

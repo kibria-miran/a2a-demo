@@ -458,3 +458,175 @@ def test_sync_responder_does_not_block_event_loop(tmp_path: Any) -> None:
         asyncio.run(run())
     finally:
         store.close()
+
+
+def test_fallback_stays_within_eps_of_target() -> None:
+    """Fallback offers track target(T) within EPS_ROUNDING for all rounds.
+
+    Section 15 promotion: "U drifts off target: the lattice search and the
+    EPS constants solve it; never loosen EPS to hide a bug."
+    """
+    from src import config
+    from src.negotiator import fallback_offer
+    from src.utility import Profile
+
+    for name in ("buyer", "seller"):
+        profile = Profile.load(
+            json.loads((Path(__file__).resolve().parents[1] / "profiles" / f"{name}.json").read_text())
+        )
+        history: list[float] = []
+        for round_number in range(0, config.MAX_ROUNDS + 1):
+            terms = fallback_offer(profile, round_number, history)
+            utility = profile.utility(terms)
+            target = profile.target_utility(min(round_number, config.MAX_ROUNDS))
+            assert abs(utility - target) <= config.EPS_ROUNDING
+            history.append(utility)
+
+
+def test_replay_never_reruns_finishing_turn(tmp_path: Any) -> None:
+    """Sending the same messageId three times never runs a second turn.
+
+    Section 15 promotion: "Duplicate turns after a timeout: always retry
+    with the SAME messageId."
+    """
+    store = Store(str(tmp_path / "seller.db"), journal_mode="MEMORY")
+    app = create_app(store, load_profile("seller"), card_url="http://testserver")
+    message = make_message(
+        messageId="replay-triple",
+        parts=[
+            protocol.data_part(
+                {
+                    "type": "offer",
+                    "terms": {"price": 800, "delivery_days": 14, "revisions": 3},
+                    "round": 0,
+                }
+            )
+        ],
+    )
+
+    async def run() -> list[dict[str, Any]]:
+        body = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "SendMessage",
+            "params": {"message": message},
+        }
+        async with loopback_client(app) as http:
+            out = []
+            for _ in range(3):
+                out.append(await _send(http, body))
+            return out
+
+    try:
+        bodies = asyncio.run(run())
+    finally:
+        store.close()
+
+    tasks = [body["result"]["task"] for body in bodies]
+    assert len({task["id"] for task in tasks}) == 1
+    assert [body["result"]["task"] for body in bodies] == [tasks[0]] * 3
+
+
+def test_resume_drift_is_rejected_with_32602(tmp_path: Any) -> None:
+    """A resumed turn whose stored round drifted from round_at_turn_start
+    must be rejected with RESUME_DRIFT (R6c), never resumed.
+
+    Section 15 promotion: "Resume fails with 'resume round drift'" —
+    the precondition is a non-NULL round_at_turn_start matching the
+    stored message's round.
+    """
+
+    store = Store(str(tmp_path / "seller.db"), journal_mode="MEMORY")
+    app = create_app(store, load_profile("seller"), card_url="http://testserver")
+    task = store.create_task(None)
+    parts = [
+        protocol.data_part(
+            {
+                "type": "offer",
+                "terms": {"price": 800, "delivery_days": 14, "revisions": 3},
+                "round": 0,
+            }
+        )
+    ]
+    store.begin_turn(task["id"], "drift", parts)
+    store.startup_recovery()
+    # Simulate the drift: round_at_turn_start no longer matches the
+    # stored message's round (0).
+    store.conn.execute(
+        "UPDATE tasks SET round_at_turn_start = 4 WHERE id = ?", (task["id"],)
+    )
+    store.conn.commit()
+    replayed = make_message(
+        messageId="drift",
+        taskId=task["id"],
+        parts=parts,
+    )
+
+    async def run() -> dict[str, Any]:
+        async with loopback_client(app) as http:
+            return await _send(
+                http,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "SendMessage",
+                    "params": {"message": replayed},
+                },
+            )
+
+    try:
+        body = asyncio.run(run())
+    finally:
+        store.close()
+
+    assert body["error"]["code"] == config.JSONRPC_INVALID_PARAMS
+    assert body["error"]["message"] == config.REASONS["RESUME_DRIFT"]
+
+
+def test_counter_advances_round_by_two_on_counter(tmp_path: Any) -> None:
+    """CAS commit advances tasks.round by exactly 2 on a counter (E-47).
+
+    Section 15 promotion: "Round symmetry breaks at the buyer's second
+    offer (round 2 rejected by R9)."
+    """
+    store = Store(str(tmp_path / "seller.db"), journal_mode="MEMORY")
+    task = store.create_task(None)
+    offer = {
+        "type": "offer",
+        "terms": {"price": 800, "delivery_days": 14, "revisions": 3},
+        "round": 0,
+    }
+    store.begin_turn(task["id"], "rt-1", [{"data": offer}])
+    committed = store.cas_commit(
+        task["id"],
+        "input-required",
+        "counter",
+        own_u=0.9,
+        agent_message_id="agent-1",
+        agent_parts=[{"data": offer | {"type": "counter", "round": 1}}],
+    )
+    assert committed is True
+    assert store.get_task(task["id"])["round"] == 2
+    store.close()
+
+
+def test_v5_private_value_leak_blocked() -> None:
+    """An LLM rationale containing a private number fails validation (V5).
+
+    Section 15 promotion: "Rationale leaks a private number."
+    """
+    from src.negotiator import REASON_V5_LEAK, validate_proposal
+    from src.utility import Profile
+
+    profile = Profile.load(
+        json.loads(
+            (Path(__file__).resolve().parents[1] / "profiles" / "seller.json").read_text()
+        )
+    )
+    proposal = {
+        "terms": {"price": 1100, "delivery_days": 21, "revisions": 1},
+        "rationale": "my reservation is 700",
+    }
+    ok, reason = validate_proposal(proposal, profile, 0, [])
+    assert not ok
+    assert reason == REASON_V5_LEAK
