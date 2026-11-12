@@ -1099,11 +1099,17 @@ Phase 8: Extensions (pick 1-2)
   S15 Agent Card contract: required fields, no private values,
       protocolVersion equals config, unsupported version ->
       IncompatibleAgent.
-  S16 Identical profiles (mirror utilities). Assert (E-28): if completed,
-      U_buyer and U_seller are each in
-      [END_U - EPS_ROUNDING, END_U + BAND_HIGH + EPS_BAND] and differ
-      from each other by less than 0.03; otherwise the task is rejected
-      with reason max_rounds.
+  S16 Identical profiles (mirror utilities). The mirror construction:
+      same weights/beta on both sides, directions flipped (buyer min /
+      seller max), symmetric reservation/ideal pairs, e.g. beta 1.5.
+      The utilities are exact mirrors (U_b(t) + U_s(t) == 1 for all t),
+      so a completed deal lands at U ~ 0.5. Assert (E-28, clarified
+      v2.2): if completed, U_buyer and U_seller are each >= END_U -
+      EPS_ROUNDING and differ from each other by less than 0.03;
+      otherwise the task is rejected with reason max_rounds. (The prior
+      [END_U, END_U + BAND_HIGH] window was unsatisfiable for mirror
+      utilities; the pair strictly sums to 1 and mirror negotiations
+      complete well before round T.)
   S17 Leak on first LLM attempt: FakeLLM returns valid JSON whose
       rationale says "my reservation is 700", then a clean answer.
       Assert: the second prompt contains NO "700" and no rejected text,

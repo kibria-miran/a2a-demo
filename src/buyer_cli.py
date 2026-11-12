@@ -199,6 +199,8 @@ async def negotiate(
                 terms=decision.terms,
                 own_u=decision.own_u,
                 source=decision.source,
+                tokens_in=decision.tokens_in,
+                tokens_out=decision.tokens_out,
             )
             _remember(message, view)
         _log_view(view, agent_name, logged)

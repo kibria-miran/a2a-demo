@@ -151,6 +151,11 @@ class FakeLLM:
                 "temperature": temperature,
             }
         )
+        from src import llm
+
+        usage = llm.token_usage(role)
+        usage.input += 137
+        usage.output += 29
         if self._index >= len(self._responses):
             pytest.fail(
                 "FakeLLM exhausted: the test staged fewer responses than the "

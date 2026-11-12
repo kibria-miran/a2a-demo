@@ -7,7 +7,10 @@ section + this file, same commit as the fix.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import sqlite3
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -249,6 +252,143 @@ def test_turn_crash_sets_failed(tmp_path: Any) -> None:
         and event.get("error_kind") == "turn_failed"
         for event in events
     )
+
+
+def test_pushover_counter_rejected_by_band(tmp_path: Any) -> None:
+    """An LLM counter that gives the peer a gift must fail V3 (band).
+
+    Section 15 promotion: "LLM acts like a pushover: the band (V3) is the
+    cure, not prompt words."
+    """
+
+    from src.negotiator import REASON_V3_BAND, validate_proposal
+
+    seller = Profile.load(
+        json.loads(
+            (Path(__file__).resolve().parents[1] / "profiles" / "seller.json").read_text()
+        )
+    )
+    pushover = {"price": 720, "delivery_days": 10, "revisions": 3}
+    ok, reason = validate_proposal(
+        {"terms": pushover, "rationale": "I will give it to you."},
+        seller,
+        1,
+        [],
+    )
+    assert not ok
+    assert reason == REASON_V3_BAND
+
+
+def test_late_llm_answer_discarded_after_cancel(tmp_path: Any) -> None:
+    """A counter arriving after a cancel must never overwrite `canceled`.
+
+    Section 15 promotion: "Cancel then a late LLM answer overwrites
+    canceled: CAS commit (D-15)."
+    """
+    import time
+
+    entered = threading.Event()
+
+    def slow_responder(
+        view: dict[str, Any],
+        incoming: dict[str, Any],
+        profile: Any,
+        own_history: list[float],
+    ) -> Decision:
+        entered.set()
+        time.sleep(0.6)
+        return Decision(
+            kind="counter",
+            terms={"price": 1150, "delivery_days": 19, "revisions": 1},
+            rationale="too late",
+            round=1,
+            own_u=0.91,
+            source="llm",
+        )
+
+    trace_path = tmp_path / "trace.jsonl"
+    trace.configure(trace_path)
+    store = Store(str(tmp_path / "seller.db"), journal_mode="MEMORY")
+    app = create_app(
+        store,
+        load_profile("seller"),
+        responder=slow_responder,
+        card_url="http://testserver",
+    )
+
+    try:
+        message = make_message(
+            messageId="cancel-race-1",
+            parts=[
+                protocol.data_part(
+                    {
+                        "type": "offer",
+                        "terms": {"price": 800, "delivery_days": 14, "revisions": 3},
+                        "round": 0,
+                    }
+                )
+            ],
+        )
+
+        async def run() -> str:
+            async with loopback_client(app) as http:
+                send = asyncio.create_task(
+                    http.post(
+                        config.A2A_RPC_PATH,
+                        json={
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "SendMessage",
+                            "params": {"message": message},
+                        },
+                    )
+                )
+                while not entered.is_set():
+                    await asyncio.sleep(0.01)
+                with sqlite3.connect(tmp_path / "seller.db") as conn:
+                    task_id = conn.execute("SELECT id FROM tasks").fetchone()[0]
+                cancel = await http.post(
+                    config.A2A_RPC_PATH,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "CancelTask",
+                        "params": {"id": task_id},
+                    },
+                )
+                assert cancel.status_code == 200
+                await send
+                return str(task_id)
+
+        task_id = asyncio.run(run())
+        task = store.task_view(task_id)
+        assert task is not None
+        assert task["status"]["state"] == "TASK_STATE_CANCELED"
+    finally:
+        store.close()
+        trace.reset()
+
+    events = [
+        json.loads(line)
+        for line in trace_path.read_text().splitlines()
+        if line.strip()
+    ]
+    assert any(event.get("kind") == "discarded" for event in events)
+    assert not any(
+        event.get("direction") == "out" and event.get("kind") == "counter" for event in events
+    )
+
+
+def test_spec_names_stay_in_pinned_modules() -> None:
+    """A2A wire names must not drift into the rest of the codebase.
+
+    Section 15 promotion: "Spec drift: keep A2A names only in config.py
+    and protocol.py."
+    """
+    assert frozenset({"SendMessage", "GetTask", "CancelTask"}) == config.A2A_METHODS
+    assert config.A2A_PROTOCOL_VERSION == "1.0"
+    assert config.AGENT_CARD_PATH == "/.well-known/agent-card.json"
+    assert config.A2A_RPC_PATH == "/"
 
 
 def test_sync_responder_does_not_block_event_loop(tmp_path: Any) -> None:

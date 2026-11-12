@@ -100,5 +100,10 @@ def test_full_negotiation_with_llm_proposer_on_both_sides(tmp_path: Any) -> None
     assert ("buyer", "llm") in by_source
     assert ("seller", "llm") in by_source
     assert not any(source == "fallback" for _agent, source in by_source)
+    llm_outbound = [e for e in outbound if e.get("source") == "llm"]
+    assert llm_outbound
+    for event in llm_outbound:
+        assert (event.get("tokens_in") or 0) > 0
+        assert (event.get("tokens_out") or 0) > 0
     assert seller_chat.count == len(SELLER_RESPONSES)
     assert buyer_chat.count == len(BUYER_RESPONSES)

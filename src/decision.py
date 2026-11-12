@@ -16,3 +16,5 @@ class Decision:
     source: str = "code"  # llm | fallback | code
     message: dict[str, Any] | None = field(default=None)
     reason: str | None = None
+    tokens_in: int | None = None
+    tokens_out: int | None = None

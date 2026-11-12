@@ -33,10 +33,28 @@ def reset_token_usage() -> None:
     _USAGE.clear()
 
 
-def token_usage(role: str | None = None) -> TokenUsage | dict[str, TokenUsage]:
-    if role is not None:
-        return _USAGE.setdefault(role, TokenUsage())
+def token_usage(role: str) -> TokenUsage:
+    return _USAGE.setdefault(role, TokenUsage())
+
+
+def token_usage_all() -> dict[str, TokenUsage]:
     return {name: TokenUsage(value.input, value.output) for name, value in _USAGE.items()}
+
+
+def usage_delta(before: dict[str, TokenUsage]) -> tuple[int, int]:
+    """Return (tokens_in, tokens_out) accumulated since ``before`` was taken."""
+
+    after = token_usage_all()
+    roles = set(before) | set(after)
+    tokens_in = sum(
+        after.get(role, TokenUsage()).input - before.get(role, TokenUsage()).input
+        for role in roles
+    )
+    tokens_out = sum(
+        after.get(role, TokenUsage()).output - before.get(role, TokenUsage()).output
+        for role in roles
+    )
+    return tokens_in, tokens_out
 
 
 def reset_client() -> None:

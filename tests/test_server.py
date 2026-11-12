@@ -815,3 +815,64 @@ async def test_s2_no_zopa_ends_rejected_without_artifact(env) -> None:
         assert buyer.feasible(data["terms"])
     for data in _offer_data(task["history"], "ROLE_AGENT"):
         assert seller.feasible(data["terms"])
+
+
+# ---------------------------------------------------------------------------
+# S16: mirror utilities (same weights/beta, flipped directions)
+# ---------------------------------------------------------------------------
+
+
+MIRROR_BUYER = {
+    "name": "buyer",
+    "beta": 1.5,
+    "issues": {
+        "price": {"direction": "min", "ideal": 600, "reservation": 1000, "weight": 0.5},
+        "delivery_days": {
+            "direction": "min",
+            "ideal": 7,
+            "reservation": 30,
+            "weight": 0.3,
+        },
+        "revisions": {"direction": "max", "ideal": 5, "reservation": 1, "weight": 0.2},
+    },
+}
+
+MIRROR_SELLER = {
+    "name": "seller",
+    "beta": 1.5,
+    "issues": {
+        "price": {"direction": "max", "ideal": 1000, "reservation": 600, "weight": 0.5},
+        "delivery_days": {
+            "direction": "max",
+            "ideal": 30,
+            "reservation": 7,
+            "weight": 0.3,
+        },
+        "revisions": {"direction": "min", "ideal": 1, "reservation": 5, "weight": 0.2},
+    },
+}
+
+
+async def test_s16_mirror_utilities_deal_lands_near_fifty_fifty(tmp_path) -> None:
+    buyer = Profile.load(MIRROR_BUYER)
+    seller = Profile.load(MIRROR_SELLER)
+    assert abs(buyer.utility({"price": 800, "delivery_days": 20, "revisions": 3})
+               + seller.utility({"price": 800, "delivery_days": 20, "revisions": 3})
+               - 1.0) < 1e-9
+
+    store = Store(str(tmp_path / "seller.db"), journal_mode="MEMORY")
+    app = create_app(store, seller, card_url="http://testserver")
+    try:
+        async with loopback_client(app) as loop:
+            client = A2AClient("http://testserver", http_client=loop)
+            result = await negotiate(client, buyer, verbose=False)
+    finally:
+        store.close()
+
+    assert result["outcome"] == "completed"
+    terms = result["terms"]
+    u_buyer = buyer.utility(terms)
+    u_seller = seller.utility(terms)
+    assert u_buyer >= config.END_U - config.EPS_ROUNDING
+    assert u_seller >= config.END_U - config.EPS_ROUNDING
+    assert abs(u_buyer - u_seller) < 0.03

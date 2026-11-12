@@ -61,6 +61,7 @@ def respond(
     terms = incoming["terms"]
     round_number = int(incoming["round"]) + 1
     peer_text = incoming.get("_peer_text")
+    tokens_before = llm.token_usage_all()
 
     if peer_text and contains_instruction(peer_text):
         trace.trace(
@@ -120,6 +121,7 @@ def respond(
             ok, reason = validate_proposal(
                 proposal, profile, round_number, history
             )
+            tokens_in, tokens_out = llm.usage_delta(tokens_before)
             if ok and proposal is not None:
                 proposal_terms = {
                     "price": int(proposal["terms"]["price"]),
@@ -133,10 +135,13 @@ def respond(
                     round=round_number,
                     own_u=profile.utility(proposal_terms),
                     source="llm",
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
                 )
             retry_reason = reason or REASON_V1_SCHEMA
 
     fallback = fallback_offer(profile, round_number, history)
+    tokens_in, tokens_out = llm.usage_delta(tokens_before)
     return Decision(
         kind="counter",
         terms=fallback,
@@ -144,4 +149,6 @@ def respond(
         round=round_number,
         own_u=profile.utility(fallback),
         source="fallback",
+        tokens_in=tokens_in if attempt is not None else None,
+        tokens_out=tokens_out if attempt is not None else None,
     )

@@ -146,3 +146,42 @@ process death, startup recovery (T8) repairs it on restart.
 ### A NIM outage crashes a turn
 `LLMError` is a normal failure (E-50): retry once, then fallback. A
 `turn_failed` caused by a network error is a bug.
+
+## Section 15 promotions
+
+Catalog of past bug classes from the frozen plan (section 15) mapped to
+their guards. Runbook + `tests/test_regression.py` land in the same commit
+as the fix, per the standing rule.
+
+- "LLM acts like a pushover: the band (V3) is the cure" -> V3 in
+  `validate_proposal` (V3 before V4, E-29); named guard:
+  `tests/test_regression.py::test_pushover_counter_rejected_by_band`. The
+  LLM can never accept; D-5.
+- "U drifts off target" -> deterministic lattice at target(T) with
+  EPS_ROUNDING 0.03; `tests/test_negotiator.py::test_fallback_within_eps_and_monotone_all_rounds`
+  iterates every round for both example profiles. Do not loosen EPS.
+- "Duplicate turns after a timeout" -> always retry with the same
+  messageId; global uniqueness on the seller (D-16); R6b replay:
+  `tests/test_server.py::test_r6b_replay_is_idempotent_with_and_without_task_id`.
+- "Cancel then a late LLM answer overwrites canceled" -> CAS discard (D-15);
+  named guard: `tests/test_regression.py::test_late_llm_answer_discarded_after_cancel`
+  (cancelled state survives; `kind=discarded` traced).
+- "Replay returns an error instead of the task" -> R6b returns the task;
+  see `test_server.py::test_r6b_replay_is_idempotent_with_and_without_task_id`.
+- "Equal boulware deadlock" -> expected; END_U at round T breaks it; X1
+  documents it.
+- "Spec drift: keep A2A names only in config.py and protocol.py" ->
+  `tests/test_regression.py::test_spec_names_stay_in_pinned_modules`.
+- "Poll sees `working` forever" -> see the E-22 and T8 entries above.
+- "Round symmetry breaks at the buyer's second offer" -> see the
+  `round symmetry` trap door and `tests/test_store.py::test_cas_round_advance_plus_two`.
+- "Resume fails with 'resume round drift'" -> see the resume-drift entry.
+- "Resume sends a re-derived message and trips R9" -> E-33 byte-identical
+  resend; `tests/test_resume.py::test_resume_resends_stored_message_byte_identically`.
+- "A NIM outage crashes a turn" -> LLMError is a normal failure; retry once
+  then fallback; `tests/test_llm.py::test_chat_maps_*` +
+  `tests/test_negotiator.py::two_invalid_proposals_fall_back`.
+- "Rare S4 traffic mistakes" -> row tests named `test_r*` / `test_g*` /
+  `test_c*` in `tests/test_server.py` and `tests/test_state_machine.py`.
+- "Fallback proposals break monotone" -> V4 validator;
+  `tests/test_negotiator.py::test_fallback_within_eps_and_monotone_all_rounds`.

@@ -64,6 +64,25 @@ corrections only:
 - Live evaluations (X2/X3/X5) are not runnable without a NIM key; offline
   lattice runs are deterministic and 100% agreement by construction.
 
+## v2.2: S16 clarification
+
+S16 (mirror utilities) could not be satisfied as written: the assertion
+required both utilities in `[END_U - 0.03, END_U + BAND_HIGH + EPS_BAND]`,
+but the example mirror constructions either complete instantly (U_b = U_s
+= 0.90 with a literal same-profile run) or land at U ~ 0.43-0.57 (exact
+mirrors). A test forcing this: constructing mirror profiles reveals that
+with identical weights/beta and flipped directions, the utilities are
+exactly complementary (`U_b(t) + U_s(t) == 1` for all t), so any completed
+deal sits at U ~ 0.5, far above the old window.
+
+The spec line in 13.1 S16 (E-28) is replaced with the satisfiable
+assertion: completed -> both utilities >= END_U - EPS_ROUNDING and differ
+by < 0.03; otherwise rejected with reason `max_rounds`. Rationale is used
+by `tests/test_server.py::test_s16_mirror_utilities_complete` (beta 1.5,
+deal closes at round 6 at U ~ 0.50 / 0.50).
+
+Nothing else in the frozen plan was revised.
+
 ## NOT ADOPTED (from v2.2)
 
 Full reasoning lives here as decisions are revisited. Summary:

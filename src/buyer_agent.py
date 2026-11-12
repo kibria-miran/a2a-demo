@@ -147,6 +147,7 @@ def next_move(
     if messages and _role(messages[-1]) == "user" and state == "input-required":
         return Decision(kind="resend", message=messages[-1])
 
+    tokens_before = llm.token_usage_all()
     buyer_offers = _offers(view, "user")
     seller_offers = _offers(view, "agent")
 
@@ -154,6 +155,8 @@ def next_move(
         terms = fallback_offer(profile, 0, [])
         rationale = FALLBACK_RATIONALE
         source = "fallback"
+        tokens_in: int | None = None
+        tokens_out: int | None = None
 
         # E-54: round 0 terms are always the fallback; the LLM may only
         # rephrase the rationale, and the same validators still apply.
@@ -172,6 +175,7 @@ def next_move(
                 ok, reason = validate_proposal(
                     {"terms": terms, "rationale": candidate}, profile, 0, []
                 )
+                tokens_in, tokens_out = llm.usage_delta(tokens_before)
                 if ok:
                     rationale = candidate
                     source = "llm"
@@ -185,6 +189,8 @@ def next_move(
             round=0,
             own_u=profile.utility(terms),
             source=source,
+            tokens_in=tokens_in if source == "llm" else None,
+            tokens_out=tokens_out if source == "llm" else None,
         )
 
     if not seller_offers:
@@ -252,6 +258,7 @@ def next_move(
             proposal_terms, reason = _valid_proposal(
                 proposal, profile, response_round, history
             )
+            tokens_in, tokens_out = llm.usage_delta(tokens_before)
             if proposal_terms is not None:
                 rationale = proposal.get("rationale", "") if proposal else ""
                 return Decision(
@@ -261,10 +268,13 @@ def next_move(
                     round=response_round,
                     own_u=profile.utility(proposal_terms),
                     source="llm",
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
                 )
             attempt_reason = reason
 
     fallback = fallback_offer(profile, response_round, history)
+    tokens_in, tokens_out = llm.usage_delta(tokens_before)
     return Decision(
         kind="offer",
         terms=fallback,
@@ -272,4 +282,6 @@ def next_move(
         round=response_round,
         own_u=profile.utility(fallback),
         source="fallback",
+        tokens_in=tokens_in if attempt is not None else None,
+        tokens_out=tokens_out if attempt is not None else None,
     )

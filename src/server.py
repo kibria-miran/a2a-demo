@@ -567,6 +567,8 @@ def create_app(
                         own_u=decision.own_u,
                         target_u=target_u,
                         source=decision.source,
+                        tokens_in=decision.tokens_in,
+                        tokens_out=decision.tokens_out,
                     )
                 else:
                     # The cancel beat us to the task: the result is discarded.
