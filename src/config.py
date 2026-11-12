@@ -77,6 +77,11 @@ SQLITE_BUSY_TIMEOUT_MS = 5_000
 TRACE_U_DECIMALS = 2
 PRICE_STEP = 10  # lattice-search granularity for the price issue
 
+# Storage / trace locations (gitignored paths; override in tests via env).
+SELLER_DB_PATH = os.getenv("A2A_SELLER_DB", "data/seller.db")
+BUYER_DB_PATH = os.getenv("A2A_BUYER_DB", "data/buyer.db")
+TRACE_PATH = os.getenv("A2A_TRACE_PATH", "logs/trace.jsonl")
+
 # ---------------------------------------------------------------------------
 # A2A protocol pin (see docs/A2A_PIN.md)
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import argparse
 
 import uvicorn
 
-from src import config
+from src import config, trace
 from src.server import create_app
 from src.store import Store
 from src.utility import load_profile
@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=config.SELLER_PORT)
     parser.add_argument("--token", default=config.A2A_TOKEN)
     args = parser.parse_args(argv)
+    trace.configure(config.TRACE_PATH)
 
     store = Store(args.db, journal_mode="WAL")
     profile = load_profile(args.profile)

@@ -45,6 +45,17 @@ path does. Regression test:
   R5-R14, replay/resume (R6a-R6d), G/C tables, CAS +2/+0 bookkeeping,
   startup recovery, turn-failure commit, client retry, first-message-timeout
   task id. S3, cancel-during-turn, S10a/S10b and restart-resume pass.
+- Phase 4 (partial): `src/trace.py` — append-only JSONL, `own_U`/`target_U`
+  quantized to 2 decimals, `severity`/`error_kind` (E-51), `own_history`
+  never written (E-35). Entry points (`main_seller`, `buyer_cli`) configure
+  it from `A2A_TRACE_PATH`; tests stay silent by default. Discarded CAS
+  results and `turn_failed` are traced. `src/buyer_store.py` keeps the
+  buyer `resume_state` table; `buyer_cli --resume` resends the stored
+  message byte-identically (E-33) and clears the row on terminal outcomes.
+  Peer text now reaches the responder on normal turns too (regression:
+  `test_peer_text_reaches_responder_on_normal_turn`).
+  Remaining for full Phase 4/5/6: slow-tier fake NIM + S9/S10/S14,
+  security payload tests, eval runner, README + DoD sweep.
 
 ## Trap doors
 

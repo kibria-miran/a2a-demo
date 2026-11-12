@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from src import config, llm, prompts
+from src import config, llm, prompts, trace
 from src.decision import Decision
 from src.negotiator import (
     FALLBACK_RATIONALE,
     REASON_V1_SCHEMA,
+    contains_instruction,
     decide_accept,
     fallback_offer,
     validate_proposal,
@@ -60,6 +61,17 @@ def respond(
     terms = incoming["terms"]
     round_number = int(incoming["round"]) + 1
     peer_text = incoming.get("_peer_text")
+
+    if peer_text and contains_instruction(peer_text):
+        trace.trace(
+            "counter",
+            direction="in",
+            agent="seller",
+            task_id=(task_view or {}).get("id"),
+            round=int(incoming["round"]),
+            severity="error",
+            error_kind="injection_attempt",
+        )
 
     if decide_accept(terms, profile, round_number):
         return Decision(

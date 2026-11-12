@@ -20,7 +20,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from src import config, protocol, seller_agent, state_machine
+from src import config, protocol, seller_agent, state_machine, trace
 from src.decision import Decision
 from src.store import Store
 from src.utility import Profile
@@ -63,6 +63,7 @@ def create_app(
     chat: Any | None = None,
     card_url: str | None = None,
     startup_recovery: bool = True,
+    trace_agent: str = "seller",
 ) -> FastAPI:
     app = FastAPI(title="A2A Negotiation Seller")
     app.state.store = store
@@ -71,6 +72,7 @@ def create_app(
     app.state.chat = chat
     app.state.card_url = card_url or config.SELLER_URL
     app.state.turns = {}
+    app.state.trace_agent = trace_agent
 
     if responder is None:
 
@@ -210,7 +212,17 @@ def create_app(
     # -- message/send -------------------------------------------------------
 
     async def _send_message(params: dict[str, Any] | None) -> dict[str, Any]:
-        message, offer, _blocking = _validate_send_params(params)
+        try:
+            message, offer, _blocking = _validate_send_params(params)
+        except RpcFault:
+            trace.trace(
+                "offer",
+                direction="in",
+                agent=app.state.trace_agent,
+                severity="error",
+                error_kind="bad_params",
+            )
+            raise
         task_id = message.taskId
 
         if not task_id:
@@ -234,6 +246,12 @@ def create_app(
 
             # R4: fast pre-check before taking the creation lock (E-48).
             if store.open_task_count() >= config.MAX_OPEN_TASKS:
+                trace.trace(
+                    "server_busy",
+                    direction="in",
+                    agent=app.state.trace_agent,
+                    severity="info",
+                )
                 raise _fault(
                     config.JSONRPC_INVALID_PARAMS,
                     config.REASONS["R4"],
@@ -243,6 +261,12 @@ def create_app(
             async with store.creation_lock:
                 # R4b: authoritative re-check inside the lock.
                 if store.open_task_count() >= config.MAX_OPEN_TASKS:
+                    trace.trace(
+                        "server_busy",
+                        direction="in",
+                        agent=app.state.trace_agent,
+                        severity="info",
+                    )
                     raise _fault(
                         config.JSONRPC_INVALID_PARAMS,
                         config.REASONS["R4"],
@@ -289,12 +313,30 @@ def create_app(
 
             # R6b: the turn already completed -> return the current task.
             if state_machine.is_terminal(task["state"]) or agent_after:
+                trace.trace(
+                    "replay",
+                    direction="in",
+                    agent=app.state.trace_agent,
+                    task_id=stored["task_id"],
+                    round=int(offer["round"]),
+                    terms=offer["terms"],
+                )
                 view = store.task_view(task["id"])
                 assert view is not None
                 return view
 
             # R6d: the turn is still running for this message.
             if task["state"] == "working":
+                trace.trace(
+                    "offer",
+                    direction="in",
+                    agent=app.state.trace_agent,
+                    task_id=task_id,
+                    round=int(offer["round"]),
+                    terms=offer["terms"],
+                    severity="error",
+                    error_kind="bad_params",
+                )
                 raise _fault(
                     config.JSONRPC_INVALID_PARAMS,
                     config.REASONS["R6D"],
@@ -316,6 +358,14 @@ def create_app(
                     kind="bad_params",
                 )
             store.resume_turn(task["id"])
+            trace.trace(
+                "resume",
+                direction="in",
+                agent=app.state.trace_agent,
+                task_id=task["id"],
+                round=int(offer["round"]),
+                terms=offer["terms"],
+            )
             incoming, text = protocol.split_parts(stored["parts"])
             if incoming is None:
                 raise _fault(
@@ -332,18 +382,48 @@ def create_app(
 
         # R7: terminal tasks are immutable.
         if state_machine.is_terminal(task["state"]):
+            trace.trace(
+                "offer",
+                direction="in",
+                agent=app.state.trace_agent,
+                task_id=task_id,
+                round=int(offer["round"]),
+                terms=offer["terms"],
+                severity="error",
+                error_kind="bad_params",
+            )
             raise _fault(
                 config.JSONRPC_INVALID_PARAMS, config.REASONS["R7"], kind="bad_params"
             )
 
         # R8: a new messageId while a turn is running.
         if task["state"] == "working":
+            trace.trace(
+                "offer",
+                direction="in",
+                agent=app.state.trace_agent,
+                task_id=task_id,
+                round=int(offer["round"]),
+                terms=offer["terms"],
+                severity="error",
+                error_kind="bad_params",
+            )
             raise _fault(
                 config.JSONRPC_INVALID_PARAMS, config.REASONS["R8"], kind="bad_params"
             )
 
         # R9: the incoming round must match the stored offer count.
         if int(offer["round"]) != int(task["round"]):
+            trace.trace(
+                "offer",
+                direction="in",
+                agent=app.state.trace_agent,
+                task_id=task_id,
+                round=int(offer["round"]),
+                terms=offer["terms"],
+                severity="error",
+                error_kind="bad_round",
+            )
             raise _fault(
                 config.JSONRPC_INVALID_PARAMS, config.REASONS["R9"], kind="bad_round"
             )
@@ -359,6 +439,16 @@ def create_app(
                 or last_data.get("type") != "counter"
                 or last_data.get("terms") != offer["terms"]
             ):
+                trace.trace(
+                    "accept",
+                    direction="in",
+                    agent=app.state.trace_agent,
+                    task_id=task_id,
+                    round=int(offer["round"]),
+                    terms=offer["terms"],
+                    severity="error",
+                    error_kind="bad_params",
+                )
                 raise _fault(
                     config.JSONRPC_INVALID_PARAMS,
                     config.REASONS["R10"],
@@ -367,6 +457,14 @@ def create_app(
 
             # R11: accepted -> completed, artifact built by code, no LLM.
             store.complete_with_accept(task_id, offer["terms"])
+            trace.trace(
+                "accept",
+                direction="in",
+                agent=app.state.trace_agent,
+                task_id=task_id,
+                round=int(offer["round"]),
+                terms=offer["terms"],
+            )
             view = store.task_view(task_id)
             assert view is not None
             return view
@@ -384,6 +482,14 @@ def create_app(
     ) -> StartedTurn:
         parts = [part.model_dump(exclude_none=True) for part in message.parts]
         store.begin_turn(task_id, message.messageId, parts)
+        trace.trace(
+            "offer",
+            direction="in",
+            agent=app.state.trace_agent,
+            task_id=task_id,
+            round=int(offer["round"]),
+            terms=offer["terms"],
+        )
         # The peer's text part is untrusted data for the prompt builder
         # (section 8.6); it must reach the responder on every turn.
         incoming = dict(offer)
@@ -431,6 +537,35 @@ def create_app(
             if decision.terms is None:
                 raise ValueError("decision has no terms")
 
+            target_u = app.state.profile.target_utility(
+                min(int(decision.round), config.MAX_ROUNDS)
+            )
+
+            def _commit(kind: str, state: str, sent: str, **kwargs: Any) -> None:
+                committed = store.cas_commit(task_id, state, sent, **kwargs)
+                if committed:
+                    trace.trace(
+                        kind,
+                        direction="out",
+                        agent=app.state.trace_agent,
+                        task_id=task_id,
+                        round=int(decision.round),
+                        terms=decision.terms,
+                        own_u=decision.own_u,
+                        target_u=target_u,
+                        source=decision.source,
+                    )
+                else:
+                    # The cancel beat us to the task: the result is discarded.
+                    trace.trace(
+                        "discarded",
+                        direction="out",
+                        agent=app.state.trace_agent,
+                        task_id=task_id,
+                        round=int(decision.round),
+                        terms=decision.terms,
+                    )
+
             if decision.kind == "counter":
                 parts = [
                     protocol.data_part(
@@ -443,8 +578,8 @@ def create_app(
                 ]
                 if decision.rationale:
                     parts.append(protocol.text_part(decision.rationale))
-                store.cas_commit(
-                    task_id,
+                _commit(
+                    "counter",
                     "input-required",
                     "counter",
                     own_u=decision.own_u,
@@ -461,8 +596,8 @@ def create_app(
                         }
                     )
                 ]
-                store.cas_commit(
-                    task_id,
+                _commit(
+                    "accept",
                     "completed",
                     "accept",
                     own_u=decision.own_u,
@@ -482,8 +617,8 @@ def create_app(
                 ]
                 if decision.rationale:
                     parts.append(protocol.text_part(decision.rationale))
-                store.cas_commit(
-                    task_id,
+                _commit(
+                    "walk_away",
                     "rejected",
                     "walk_away",
                     agent_message_id=str(uuid.uuid4()),
@@ -495,7 +630,23 @@ def create_app(
             raise
         except Exception:
             # E-22: a turn never leaves a task stuck in `working`.
-            store.cas_commit(task_id, "failed", "failed")
+            committed = store.cas_commit(task_id, "failed", "failed")
+            if committed:
+                trace.trace(
+                    "turn_failed",
+                    direction="out",
+                    agent=app.state.trace_agent,
+                    task_id=task_id,
+                    severity="error",
+                    error_kind="turn_failed",
+                )
+            else:
+                trace.trace(
+                    "discarded",
+                    direction="out",
+                    agent=app.state.trace_agent,
+                    task_id=task_id,
+                )
 
     # -- tasks/get and tasks/cancel ----------------------------------------
 

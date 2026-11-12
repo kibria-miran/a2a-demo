@@ -9,11 +9,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from src import config, llm, prompts
+from src import config, llm, prompts, trace
 from src.decision import Decision
 from src.negotiator import (
     FALLBACK_RATIONALE,
     REASON_V1_SCHEMA,
+    contains_instruction,
     decide_accept,
     fallback_offer,
     validate_proposal,
@@ -206,6 +207,18 @@ def next_move(
             round=response_round,
             own_u=profile.utility(terms),
             source="code",
+        )
+
+    peer_text = seller_offer.get("text")
+    if peer_text and contains_instruction(peer_text):
+        trace.trace(
+            "counter",
+            direction="in",
+            agent="buyer",
+            task_id=view.get("id"),
+            round=int(seller_offer["round"]),
+            severity="error",
+            error_kind="injection_attempt",
         )
 
     if response_round > config.MAX_ROUNDS:
