@@ -456,7 +456,12 @@ def create_app(
                 )
 
             # R11: accepted -> completed, artifact built by code, no LLM.
-            store.complete_with_accept(task_id, offer["terms"])
+            store.complete_with_accept(
+                task_id,
+                offer["terms"],
+                message_id=message.messageId,
+                parts=[part.model_dump(exclude_none=True) for part in message.parts],
+            )
             trace.trace(
                 "accept",
                 direction="in",
@@ -525,8 +530,16 @@ def create_app(
         own_history: list[float],
     ) -> None:
         try:
-            result = app.state.responder(
-                view, incoming, app.state.profile, own_history
+            # The responder (sync: pure negotiation code and a blocking NIM
+            # call) must not block the event loop: run it in a thread so the
+            # loop stays responsive for tasks/get, tasks/cancel and the
+            # BLOCKING_TIMEOUT in _await_turn (E-4).
+            result = await asyncio.to_thread(
+                app.state.responder,
+                view,
+                incoming,
+                app.state.profile,
+                own_history,
             )
             if inspect.isawaitable(result):
                 result = await result

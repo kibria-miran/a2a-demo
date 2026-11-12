@@ -9,6 +9,7 @@ fallback only after the retry also fails.
 from __future__ import annotations
 
 import copy
+import socket
 import sqlite3
 import uuid
 from collections.abc import Iterator
@@ -19,6 +20,28 @@ import httpx
 import pytest
 
 from src import clock, config
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E-53: no test may open a socket to a non-local host.
+
+    Every test (fast and slow) runs under this guard; the slow tier is
+    allowed to reach ``127.0.0.1`` for its real subprocesses. Any attempt
+    to reach a real external host (e.g. NIM) fails loudly.
+    """
+
+    real_connect = socket.socket.connect
+
+    def guard(self: socket.socket, address: Any) -> Any:
+        host = address[0] if isinstance(address, tuple) else str(address)
+        if host not in {"127.0.0.1", "localhost", "::1", "testserver"}:
+            raise RuntimeError(
+                f"network access to {host!r} is forbidden (fast tier must be offline)"
+            )
+        return real_connect(self, address)
+
+    monkeypatch.setattr(socket.socket, "connect", guard)
 
 # ---------------------------------------------------------------------------
 # Factories. Every default field is present; overrides are deep-merged.

@@ -344,8 +344,20 @@ class Store:
                 )
             return cursor.rowcount == 1
 
-    def complete_with_accept(self, task_id: str, terms: dict[str, int]) -> dict[str, Any]:
-        """R11: buyer accepted the seller's last offer. No LLM, no round change."""
+    def complete_with_accept(
+        self,
+        task_id: str,
+        terms: dict[str, int],
+        *,
+        message_id: str | None = None,
+        parts: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """R11: buyer accepted the seller's last offer. No LLM, no round change.
+
+        When the buyer's accept message parts are provided, the accept is
+        stored in the SAME transaction, so replaying its messageId hits R6b
+        instead of falling through to R7.
+        """
 
         with self.conn:
             task = self.get_task(task_id)
@@ -357,6 +369,8 @@ class Store:
             elif task["state"] != "completed":
                 state_machine.transition(task["state"], "completed")
             now = _now_iso()
+            if message_id is not None and parts is not None:
+                self._insert_message(task_id, message_id, "user", parts)
             self.conn.execute(
                 "UPDATE tasks SET state = 'completed', updated_at = ? WHERE id = ?",
                 (now, task_id),

@@ -30,6 +30,29 @@ attached `_peer_text` correctly — only the normal path dropped it). Fix:
 path does. Regression test:
 `tests/test_regression.py::test_peer_text_reaches_responder_on_normal_turn`.
 
+### Replay of an accept errors instead of returning the task
+The buyer's accept message was never stored (R11 only wrote tasks +
+artifact), so a replay fell through to R7 (-32602 terminal). Fix:
+`store.complete_with_accept()` stores the accept message in the SAME
+transaction as the completion, so D-8 replay returns the task (R6b).
+Regression test:
+`tests/test_regression.py::test_replay_of_accept_returns_the_completed_task`.
+
+### The sync LLM call freezes the whole seller process
+`llm.chat()` is synchronous; called directly from the async turn task it
+monopolized uvicorn's event loop and also broke the
+`asyncio.wait_for(..., BLOCKING_TIMEOUT)` snapshot — stalling
+tasks/get, tasks/cancel AND the reply. Fix: run the responder in a
+worker thread (`asyncio.to_thread`). Regression test:
+`tests/test_regression.py::test_sync_responder_does_not_block_event_loop`.
+
+### The seller runs fallback-only without ever calling the LLM
+`main_seller.py` created the app without `chat=`, so the default
+responder always used the fallback, regardless of env credentials. Fix:
+`build_app()` passes `llm.default_chat()` (None => explicit fallback-only
+mode). Guard: `tests/test_llm.py` (`test_build_app_*`). The slow tier
+itself breaks without this: scripted fake-NIM responses never get used.
+
 ### S17 assertion: the profile prompt contains the private values
 `prompts._profile_payload` includes `ideal`/`reservation`, so the retry
 prompt for a leaky-then-clean proposer ALWAYS contains the digits (e.g.
@@ -63,6 +86,18 @@ the absence of private digits in the prompt.
   `test_peer_text_reaches_responder_on_normal_turn`).
   Remaining for full Phase 4/5/6: slow-tier fake NIM + S9/S10/S14,
   eval runner, README + DoD sweep.
+- Phase 6 (partial): slow tier exists. `tests/fake_nim_server.py` — real
+  HTTP fake of the NIM chat API (`/__stage`, `/__control`, `/__reset`,
+  `/__state`, port printed to stdout). `tests/test_slow.py` — S9
+  (kill -9 mid-turn, restart, R6c resume, no duplicated messages),
+  S10a/S10b (concurrency; the S10a loser may see R6b or R6d while its
+  turn is in flight), S14 (both LLM attempts die at LLM_TIMEOUT, snapshot
+  reply carries the task id at BLOCKING_TIMEOUT, turn completes afterwards).
+  `tests/test_fast_tier_no_network.py` + the autouse `_no_real_network`
+  fixture in conftest block every non-localhost socket across the whole
+  suite (E-53). Four production bugs found and fixed via this tier (see
+  the trap doors above). `make check` stays fast-tier-only; slow tier is
+  `make slow` (~90 s).
 - Phase 5 (partial): security scenario tests `tests/test_security.py` —
   S5 (rationales carry no private price values/banned phrases across a full
   negotiation), S6 (all `evals/injection_payloads.json` payloads incl.
