@@ -384,7 +384,13 @@ def create_app(
     ) -> StartedTurn:
         parts = [part.model_dump(exclude_none=True) for part in message.parts]
         store.begin_turn(task_id, message.messageId, parts)
-        return _spawn_turn(task_id, offer)
+        # The peer's text part is untrusted data for the prompt builder
+        # (section 8.6); it must reach the responder on every turn.
+        incoming = dict(offer)
+        text_part = next((part.text for part in message.parts if part.text), None)
+        if text_part:
+            incoming["_peer_text"] = text_part
+        return _spawn_turn(task_id, incoming)
 
     def _spawn_turn(task_id: str, incoming: dict[str, Any]) -> StartedTurn:
         view = store.task_view(task_id)

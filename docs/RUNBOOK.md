@@ -22,6 +22,14 @@ make slow              # pytest -m slow only (S9, S10, S14)
 make all               # pytest (fast + slow)
 ```
 
+### Peer text never reaches the seller's LLM
+`_begin_turn` stripped the message down to its data part before spawning
+the turn, so the proposer prompt saw no peer rationale (the resume path
+attached `_peer_text` correctly — only the normal path dropped it). Fix:
+`_begin_turn` attaches the text part as `_peer_text` like the resume
+path does. Regression test:
+`tests/test_regression.py::test_peer_text_reaches_responder_on_normal_turn`.
+
 ## Phase status
 
 - Phase 0: skeleton, `src/config.py`, `src/clock.py`, `tests/conftest.py`,
