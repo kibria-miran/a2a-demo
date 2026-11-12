@@ -60,6 +60,7 @@ def create_app(
     *,
     token: str | None = None,
     responder: Any | None = None,
+    chat: Any | None = None,
     card_url: str | None = None,
     startup_recovery: bool = True,
 ) -> FastAPI:
@@ -67,9 +68,29 @@ def create_app(
     app.state.store = store
     app.state.profile = profile
     app.state.token = token
-    app.state.responder = responder or seller_agent.respond
+    app.state.chat = chat
     app.state.card_url = card_url or config.SELLER_URL
     app.state.turns = {}
+
+    if responder is None:
+
+        def default_responder(
+            view: dict[str, Any],
+            incoming: dict[str, Any],
+            seller_profile: Profile,
+            own_history: list[float],
+        ) -> Decision:
+            return seller_agent.respond(
+                view,
+                incoming,
+                seller_profile,
+                own_history,
+                chat=app.state.chat,
+            )
+
+        app.state.responder = default_responder
+    else:
+        app.state.responder = responder
 
     if startup_recovery:
         store.startup_recovery()
@@ -295,13 +316,15 @@ def create_app(
                     kind="bad_params",
                 )
             store.resume_turn(task["id"])
-            incoming, _text = protocol.split_parts(stored["parts"])
+            incoming, text = protocol.split_parts(stored["parts"])
             if incoming is None:
                 raise _fault(
                     config.JSONRPC_INVALID_PARAMS,
                     config.REASONS["RESUME_DRIFT"],
                     kind="bad_params",
                 )
+            incoming = dict(incoming)
+            incoming["_peer_text"] = text
             return _spawn_turn(task["id"], incoming)
 
         task = store.get_task(task_id)
