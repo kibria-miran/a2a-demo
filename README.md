@@ -107,14 +107,18 @@ profiles/       private buyer/seller profiles (never on the wire)
 
 Working: full wire protocol (offer/counter/accept/walk_away), idempotency,
 restart recovery, concurrency safety, injection/leak handling (V5/V6) with
-quantized trace, buyer `--resume`, scenario tests S1, S2, S3, S5, S6, S9,
-S10, S14, S17, S19, S20 and table-driven coverage of the R/G/C/S4/S7/S11–S18
-rows.
+quantized trace (incl. `tokens_in`/`tokens_out` per outbound event),
+buyer `--resume`, LLM-vs-LLM e2e test (`tests/test_llm_e2e.py`), scenario
+tests S1, S2, S3, S5, S6, S9, S10, S14, S16, S17, S19, S20, and
+table-driven coverage of the R/G/C/S4 rows.
 
 Known limitations (accepted, documented in `docs/DESIGN_NOTES.md`):
 - negotiation is one-shot linear; no revision/branch support
 - `fallback_offer` cannot reason about the peer's utility (no bid-shading)
-- X2/X3/X5 live comparisons not yet run; offline lattice agreement rate is
-  1.00 by construction, so offline results don't show "the LLM's edge"
+- X2/X3/X5 live comparisons not yet run (need a NIM key); offline lattice
+  agreement rate is 1.00 by construction, so offline results don't show
+  "the LLM's edge"
+- `Decision`-level token accounting only covers the agents' own LLM calls;
+  it does not capture R3/parse failures before a proposal is built
 - equal boulware deadlock is possible with symmetric curves at high betas
   (documented; `END_U` at round T breaks it)
