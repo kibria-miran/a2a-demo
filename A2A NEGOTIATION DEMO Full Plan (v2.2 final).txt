@@ -22,12 +22,11 @@ the moment it is discovered, gets a matching docs/RUNBOOK.md section and
 a tests/test_regression.py::test_<slug> that fails without the fix, in
 the SAME commit.
 
-BEFORE CODING: see Phase 0.5. The "30 min" estimate is wrong; it takes
-hours. Treat it as a phase with an artifact (docs/A2A_PIN.md), not a
-prelude. Pin what you find in src/config.py as A2A_PROTOCOL_VERSION.
-This doc uses v0.3-style names. If the spec renamed anything, change ONLY
-config.py, protocol.py and section 8.1, and log the diff in
-docs/DESIGN_NOTES.md.
+BEFORE CODING: Phase 0.5 is DONE (docs/A2A_PIN.md exists; the pin's
+diff was applied ONLY to config.py, protocol.py and section 8.1, logged
+in docs/DESIGN_NOTES.md as "v2.2: A2A pin"; A2A_PROTOCOL_VERSION in
+src/config.py holds the pinned version). The spec is frozen at the URL
+hash in docs/A2A_PIN.md; do not re-read it.
 
 V2 ERRATA (applied inline; unchanged from v2)
 ---------------------------------------------
