@@ -9,7 +9,7 @@ import sys
 import uuid
 from typing import Any
 
-from src import config, protocol, trace
+from src import config, llm, protocol, trace
 from src.buyer_agent import next_move
 from src.buyer_store import BuyerStore
 from src.client import A2AClient, A2AClientError, SendFailed
@@ -234,6 +234,7 @@ async def main_async(args: argparse.Namespace) -> int:
                     initial_view=view,
                     buyer_store=buyer_store,
                     url=args.seller,
+                    chat=llm.default_chat(),
                 )
             else:
                 await negotiate(
@@ -242,6 +243,7 @@ async def main_async(args: argparse.Namespace) -> int:
                     verbose=args.verbose,
                     buyer_store=buyer_store,
                     url=args.seller,
+                    chat=llm.default_chat(),
                 )
         except AgreementMismatch as exc:
             print(f"AGREEMENT_MISMATCH: {exc}", file=sys.stderr)
