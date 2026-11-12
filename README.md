@@ -48,6 +48,10 @@ a final line: `AGREED ...` / `END outcome=...`. A negotiation verifiably
 completes with zero LLM calls too (fallback-only mode — the default when
 `NIM_MODEL` is unset), which is what the offline evals and S1 measure.
 
+Verified end-to-end from the shell (offline, fallback-only): round 0 →
+round 8 → `AGREED {price:790, ...} U_buyer=0.51` over the real wire against
+a real uvicorn subprocess; trace lines appear in `A2A_TRACE_PATH`.
+
 `--resume` resends the stored message byte-identically after a crash
 (section 7.1, E-33); the accept and every offer that started a turn are
 persisted so replaying a messageId never runs a duplicate turn (D-8, D-16).
