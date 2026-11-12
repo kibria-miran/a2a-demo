@@ -30,6 +30,13 @@ attached `_peer_text` correctly — only the normal path dropped it). Fix:
 path does. Regression test:
 `tests/test_regression.py::test_peer_text_reaches_responder_on_normal_turn`.
 
+### S17 assertion: the profile prompt contains the private values
+`prompts._profile_payload` includes `ideal`/`reservation`, so the retry
+prompt for a leaky-then-clean proposer ALWAYS contains the digits (e.g.
+`700`). Assert on the rejected *text* (rationale, "my reservation") and the
+presence of `<retry_reason>V5 private value leak</retry_reason>`, never on
+the absence of private digits in the prompt.
+
 ## Phase status
 
 - Phase 0: skeleton, `src/config.py`, `src/clock.py`, `tests/conftest.py`,
@@ -55,7 +62,15 @@ path does. Regression test:
   Peer text now reaches the responder on normal turns too (regression:
   `test_peer_text_reaches_responder_on_normal_turn`).
   Remaining for full Phase 4/5/6: slow-tier fake NIM + S9/S10/S14,
-  security payload tests, eval runner, README + DoD sweep.
+  eval runner, README + DoD sweep.
+- Phase 5 (partial): security scenario tests `tests/test_security.py` —
+  S5 (rationales carry no private price values/banned phrases across a full
+  negotiation), S6 (all `evals/injection_payloads.json` payloads incl.
+  NFKC-fullwidth + zero-width variants: dropped from the proposer prompt,
+  never accepted, fallback sent, `error_kind=injection_attempt` logged),
+  S17 (retry prompt excludes the rejected rationale; see the S17 note
+  above), S20 (bearer on POST routes only, card GET public). Leak corpus:
+  `evals/leak_probes.json`.
 
 ## Trap doors
 
