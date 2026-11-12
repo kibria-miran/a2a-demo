@@ -1,0 +1,9 @@
+{
+  "name": "buyer",
+  "beta": 2.0,
+  "issues": {
+    "price": {"direction": "min", "ideal": 600, "reservation": 1000, "weight": 0.5},
+    "delivery_days": {"direction": "min", "ideal": 7, "reservation": 30, "weight": 0.2},
+    "revisions": {"direction": "max", "ideal": 5, "reservation": 1, "weight": 0.3}
+  }
+}

@@ -1,0 +1,35 @@
+[project]
+name = "a2a-negotiation-demo"
+version = "0.1.0"
+description = "Two independent agents negotiate a Godot job over a minimal A2A subset"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers"
+markers = [
+    "fast: in-process, offline, no ports and no sleeps (Phase gate)",
+    "slow: real uvicorn subprocesses, kill -9, real sleeps (S9, S10, S14)",
+    "live: one optional real NIM negotiation",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "conftest"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
