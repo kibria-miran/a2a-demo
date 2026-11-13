@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from tests.conftest import loopback_client, make_message
+from tests.conftest import FakeLLM, loopback_client, make_message
 
 from src import config, protocol, seller_agent
 from src.buyer_cli import negotiate
 from src.client import A2AClient
+from src.negotiator import fallback_offer
 from src.server import create_app
 from src.store import Store
 from src.utility import Profile
@@ -290,6 +292,60 @@ async def test_r6b_replay_is_idempotent_with_and_without_task_id(env, http) -> N
         ]
         assert replay["artifacts"] == first["artifacts"]
     assert len(env.store.messages_for_task(first["id"])) == count
+
+
+async def test_s7_replay_is_byte_identical_and_runs_one_turn(tmp_path: Any) -> None:
+    """S7: three sequential replays of one messageId, byte-identical replies.
+
+    Only ``status.timestamp`` may differ. The seller uses a scripted LLM so
+    the call count proves exactly one turn ran.
+    """
+
+    seller_chat = FakeLLM(
+        [json.dumps({
+            "terms": {"price": 1150, "delivery_days": 19, "revisions": 1},
+            "rationale": "One counter, then hold.",
+        })]
+    )
+    store = Store(str(tmp_path / "seller.db"), journal_mode="MEMORY")
+    app = create_app(
+        store, load_profile("seller"), chat=seller_chat.chat, card_url="http://testserver"
+    )
+    opening_terms = fallback_offer(load_profile("buyer"), 0, [])
+    message = offer(0, terms=opening_terms, message_id="s7-replay")
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": config.A2A_METHOD_SEND,
+        "params": {"message": message},
+    }
+    timestamp = re.compile(r'"timestamp":"[^"]*"')
+
+    async def run() -> list[tuple[str, dict[str, Any]]]:
+        async with loopback_client(app) as http:
+            out = []
+            for _ in range(3):
+                response = await http.post(config.A2A_RPC_PATH, json=body)
+                assert response.status_code == 200
+                out.append((response.text, response.json()))
+            return out
+
+    try:
+        responses = await run()
+        task = responses[0][1]["result"]["task"]
+        task_id = task["id"]
+        rows = len(store.messages_for_task(task_id))
+        round_after_first = store.get_task(task_id)["round"]
+        assert round_after_first == 2  # E-47: incoming offer + counter
+    finally:
+        store.close()
+
+    normalized = [timestamp.sub('"timestamp":"<ts>"', raw) for raw, _ in responses]
+    assert normalized[0] == normalized[1] == normalized[2]
+    assert len({json.dumps(data, sort_keys=True) for _raw, data in responses}) == 1
+    assert seller_chat.count == 1, "replay must not run a second turn"
+    assert rows == 2, "exactly one user row and one agent row"
+    assert task["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
 
 
 async def test_r6d_rejects_same_message_while_turn_is_running(env, http) -> None:

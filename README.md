@@ -134,7 +134,7 @@ profiles/       private buyer/seller profiles (never on the wire)
 | Every T1–T8 and R0–R14 (incl R4b, R6a–R6d), G1–G3, C1–C5 row tested | ✓ | `test_state_machine.py`, `test_server.py` (R0–R14/G/C parametrized + named) |
 | Round semantics end-to-end (S1 round symmetry) | ✓ | `test_server.py::test_s1_...` asserts `0,2,4,6` (buyer) / `1,3,5,7` (seller) |
 | Restart mid-task resumes (S9) | ✓ | `test_slow.py::test_s9_kill9_midturn_restart_resumes`, `test_resume.py` |
-| Replay never runs a second turn (S7, S10) | ✓ | `test_server.py::test_r6b_...`, `S10a/S10b` both tiers, `test_regression.py::test_replay_...` |
+| Replay never runs a second turn; replies byte-identical minus timestamp (S7, S10) | ✓ | `test_server.py::test_s7_replay_is_byte_identical_and_runs_one_turn`, `test_r6b_...`, `S10a/S10b` both tiers, `test_regression.py::test_replay_...` |
 | Cancel during a running turn never overwritten (S18) | ✓ | `S10`/`S18`-class tests, `test_regression.py::test_late_llm_answer_discarded_after_cancel` |
 | A NIM outage is a normal failure; retry once; fallback (E-50) | ✓ | `test_llm.py`, `test_negotiator.py::two_invalid_proposals_fall_back`, fallback-only shell run verified |
 | Agreement hash verified on every completed task | ✓ | `test_server.py::test_s1_...` asserts artifact pre/post the negotiation |
