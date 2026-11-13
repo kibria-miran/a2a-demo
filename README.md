@@ -129,7 +129,7 @@ profiles/       private buyer/seller profiles (never on the wire)
 | docs/A2A_PIN.md exists; diff logged "v2.2: A2A pin" | ✓ | `docs/A2A_PIN.md`, `docs/DESIGN_NOTES.md` ("v2.2: A2A pin") |
 | test_smoke asserts E-56 factory/FakeLLM semantics before test_server | ✓ | `tests/test_smoke.py` (factory, FakeLLM semantics, inject_clock, loopback) |
 | Fallback ≤ EPS_ROUNDING of target, all rounds, both profiles; E-54 covered | ✓ | `test_negotiator.py::test_fallback_within_eps_and_monotone_all_rounds[buyer/seller]`, `test_empty_history_skips_monotone_filter` |
-| Full negotiation, NO LLM (S1, S2); pytest -m fast < 10 s | ✓ | `test_server.py::test_s1_...`, `test_s2_...` (229 fast tests in ~6 s) |
+| Full negotiation, NO LLM (S1, S2); pytest -m fast < 10 s | ✓ | `test_server.py::test_s1_...`, `test_s2_...` (238 fast tests in ~7 s) |
 | LLM proposer both sides | ✓ | `tests/test_llm_e2e.py` (both agents, `source=="llm"`, task completes) |
 | Every T1–T8 and R0–R14 (incl R4b, R6a–R6d), G1–G3, C1–C5 row tested | ✓ | `test_state_machine.py`, `test_server.py` (R0–R14/G/C parametrized + named) |
 | Round semantics end-to-end (S1 round symmetry) | ✓ | `test_server.py::test_s1_...` asserts `0,2,4,6` (buyer) / `1,3,5,7` (seller) |
@@ -144,7 +144,7 @@ profiles/       private buyer/seller profiles (never on the wire)
 | S19 injected row sets round_at_turn_start; drifted round → RESUME_DRIFT | ✓ | `test_server.py::test_r6c_resume_drift_is_rejected`, `tests/test_resume.py`, `test_regression.py::test_resume_drift_is_rejected_with_32602` |
 | X1–X6 saved in evals/results; summarized here | ~ X1/X4/X6 saved (offline); X2/X3/X5 implemented, live numbers pending NIM key | `evals/results/*.jsonl` (gitignored), `tests/test_evals.py`, this file |
 | pytest zero network (except -m live); test_fast_tier_no_network.py enforces | ✓ | `conftest.py::_no_real_network`, `tests/test_fast_tier_no_network.py` |
-| `make check` passes | ✓ | 229 fast + ruff + mypy, ~6 s |
+| `make check` passes | ✓ | 238 fast + ruff + mypy, ~7 s |
 | README, RUNBOOK, DESIGN_NOTES, A2A_PIN current | ✓ | this file; `docs/*` |
 | Every §15 entry has a test_regression.py guard + runbook section | ✓ | `tests/test_regression.py` (12 tests, one per promoted bug); RUNBOOK "Section 15 promotions" |
 

@@ -95,7 +95,7 @@ the absence of private digits in the prompt.
   `kind` discriminator. Internal names stay short.
 - Phase 1: wire models, state machine, utility/negotiator, SQLite store with
   the CAS commit, seller server, client, buyer CLI and fallback-only agents.
-  Gate: `pytest -m fast` is 195 tests in ~3 s; S1 completes with a verified
+  Gate: `pytest -m fast` is ~240 tests in ~7 s; S1 completes with a verified
   artifact; S2 ends `rejected` with no artifact; both report zero LLM calls.
 - Phase 2a/2b: per-task and creation locks released before awaiting the turn,
   R5-R14, replay/resume (R6a-R6d), G/C tables, CAS +2/+0 bookkeeping,
