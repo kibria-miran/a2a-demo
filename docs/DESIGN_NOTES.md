@@ -87,7 +87,7 @@ deal sits at U ~ 0.5, far above the old window.
 The spec line in 13.1 S16 (E-28) is replaced with the satisfiable
 assertion: completed -> both utilities >= END_U - EPS_ROUNDING and differ
 by < 0.03; otherwise rejected with reason `max_rounds`. Rationale is used
-by `tests/test_server.py::test_s16_mirror_utilities_complete` (beta 1.5,
+by `tests/test_server.py::test_s16_mirror_utilities_deal_lands_near_fifty_fifty` (beta 1.5,
 deal closes at round 6 at U ~ 0.50 / 0.50).
 
 Nothing else in the frozen plan was revised.
