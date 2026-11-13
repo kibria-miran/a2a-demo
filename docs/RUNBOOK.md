@@ -22,6 +22,32 @@ make slow              # pytest -m slow only (S9, S10, S14)
 make all               # pytest (fast + slow)
 ```
 
+## Live experiments (X2/X3/X5)
+
+X2/X3/X5 need a real NIM key and are never part of `make check`:
+
+```bash
+.venv/bin/python evals/run_evals.py --experiment x2 --mode live --runs 20
+.venv/bin/python evals/run_evals.py --experiment x3 --mode live --runs 20
+.venv/bin/python evals/run_evals.py --experiment x5 --mode live --runs 20 \
+    --seller-model <id> --buyer-model <id>       # or NIM_MODEL + NIM_MODEL_B
+```
+
+Each writes ONE combined file so both arms sit side by side:
+`evals/results/x2-compare.jsonl`, `x3-rationale.jsonl`, `x5-models.jsonl`.
+Every run records `tokens_in`/`tokens_out`; compare against the section 11
+budget (~12k tokens per negotiation).
+
+Trap door: without `NVIDIA_API_KEY` (or without a model id) the runner
+exits with `live mode needs NVIDIA_API_KEY ...` / `... needs a model id`
+instead of a traceback. X2/X3 also refuse `--mode fallback` explicitly:
+their comparison needs a real proposer. X5 refuses identical model ids.
+
+Offline guards for the wiring (no network, no key):
+`tests/test_evals.py` injects `FakeLLM` callables into both sides, checks
+the token ledger, the per-call model binding, and that
+`include_rationale=False` produces data-only messages.
+
 ### Peer text never reaches the seller's LLM
 `_begin_turn` stripped the message down to its data part before spawning
 the turn, so the proposer prompt saw no peer rationale (the resume path

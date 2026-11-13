@@ -61,8 +61,17 @@ corrections only:
 - In `test_llm_e2e.py` both agents negotiate LLM-vs-LLM on a scripted
   FakeLLM; the negotiation completes and `source == "llm"` for all
   outbound agent messages (no fallback consumed).
-- Live evaluations (X2/X3/X5) are not runnable without a NIM key; offline
-  lattice runs are deterministic and 100% agreement by construction.
+- X2/X3/X5 were advertised in `evals/run_evals.py` but X2 was a print stub
+  and X3/X5 were absent from the CLI. Implemented now: X2 runs fallback vs
+  LLM-on-both-sides; X3 adds an `include_rationale` switch at the protocol
+  boundary (`create_app(..., include_rationale=...)` and
+  `negotiate(..., include_rationale=...)`) so outbound text parts can be
+  suppressed; X5 adds an optional per-call `model` to `llm.chat()` and
+  `llm.default_chat(model=...)`, with no global config mutation. Each
+  writes a combined result file (`x2-compare`, `x3-rationale`,
+  `x5-models`) and records per-run tokens. Live numbers still require a
+  NIM key; the arms fail fast with an actionable message without one.
+  Offline wiring guards live in `tests/test_evals.py`.
 
 ## v2.2: S16 clarification
 

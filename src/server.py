@@ -64,12 +64,14 @@ def create_app(
     card_url: str | None = None,
     startup_recovery: bool = True,
     trace_agent: str = "seller",
+    include_rationale: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="A2A Negotiation Seller")
     app.state.store = store
     app.state.profile = profile
     app.state.token = token
     app.state.chat = chat
+    app.state.include_rationale = include_rationale
     app.state.card_url = card_url or config.SELLER_URL
     app.state.turns = {}
     app.state.trace_agent = trace_agent
@@ -591,7 +593,7 @@ def create_app(
                         }
                     )
                 ]
-                if decision.rationale:
+                if app.state.include_rationale and decision.rationale:
                     parts.append(protocol.text_part(decision.rationale))
                 _commit(
                     "counter",
@@ -630,7 +632,7 @@ def create_app(
                         }
                     )
                 ]
-                if decision.rationale:
+                if app.state.include_rationale and decision.rationale:
                     parts.append(protocol.text_part(decision.rationale))
                 _commit(
                     "walk_away",

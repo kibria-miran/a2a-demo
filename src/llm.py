@@ -7,6 +7,7 @@ server's turn guard does not turn it into ``failed``.
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
 from typing import Any
 
@@ -81,14 +82,20 @@ def chat(
     messages: list[dict[str, Any]],
     role: str = "proposer",
     temperature: float = config.LLM_TEMPERATURE,
+    model: str | None = None,
 ) -> str:
-    """Call the chat completions endpoint and return the raw content string."""
+    """Call the chat completions endpoint and return the raw content string.
 
-    if not config.NIM_MODEL:
+    ``model`` overrides ``config.NIM_MODEL`` for one call. X5 uses it to give
+    each side a different model without mutating global config.
+    """
+
+    selected_model = model or config.NIM_MODEL
+    if not selected_model:
         raise LLMError("NIM_MODEL is not configured")
     try:
         response = _get_client().chat.completions.create(
-            model=config.NIM_MODEL,
+            model=selected_model,
             messages=messages,
             temperature=temperature,
         )
@@ -109,9 +116,17 @@ def chat(
     return content
 
 
-def default_chat() -> Any | None:
-    """The real client only when both a model and a key are configured."""
+def default_chat(model: str | None = None) -> Any | None:
+    """The real client only when both a model and a key are configured.
 
-    if config.NIM_MODEL and config.NVIDIA_API_KEY:
-        return chat
+    With ``model`` set (X5), return a callable bound to that model. Without
+    it, return ``chat`` itself so existing wiring (and its identity test) is
+    unchanged.
+    """
+
+    selected_model = model or config.NIM_MODEL
+    if selected_model and config.NVIDIA_API_KEY:
+        if model is None:
+            return chat
+        return functools.partial(chat, model=model)
     return None

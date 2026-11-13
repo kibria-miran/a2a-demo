@@ -96,9 +96,21 @@ construction offline — the band gates the *LLM proposer* only; the lattice
 fallback is exempt from V3. The meaningful arm is `--mode live`.
 
 **X2 (LLM vs pure fallback), X3 (rationale on/off), X5 (model per side)**
-require a real NIM key and have not been run in this environment. With the
-key present, `python evals/run_evals.py --experiment x2 --mode live` runs
-this comparison for real.
+are implemented and have not been run in this environment (no NIM key).
+Each runs both arms of its comparison and writes one combined file, with
+per-run token counts for the section 11 budget:
+
+```bash
+.venv/bin/python evals/run_evals.py --experiment x2 --mode live --runs 20
+.venv/bin/python evals/run_evals.py --experiment x3 --mode live --runs 20
+.venv/bin/python evals/run_evals.py --experiment x5 --mode live --runs 20 \
+    --seller-model <seller-model-id> --buyer-model <buyer-model-id>
+```
+
+Results go to `evals/results/x2-compare.jsonl`, `x3-rationale.jsonl` and
+`x5-models.jsonl`. Without a key they exit with an actionable message
+instead of a traceback. The wiring (both sides, rationale suppression,
+per-side model binding) is covered offline by `tests/test_evals.py`.
 
 ## Layout
 
@@ -130,14 +142,14 @@ profiles/       private buyer/seller profiles (never on the wire)
 | round_at_turn_start NULL on idle task; test passes | ✓ | `test_store.py::test_round_at_turn_start_is_null_when_idle` |
 | CAS +2 on counter, +0 on accept/walk_away | ✓ | `test_store.py::test_cas_round_advance_plus_two`, `test_cas_accept_and_walk_away_do_not_advance_round` |
 | S19 injected row sets round_at_turn_start; drifted round → RESUME_DRIFT | ✓ | `test_server.py::test_r6c_resume_drift_is_rejected`, `tests/test_resume.py`, `test_regression.py::test_resume_drift_is_rejected_with_32602` |
-| X1–X6 saved in evals/results; summarized here | ~ X1/X4/X6 saved (offline); X2/X3/X5 live-only, pending NIM key | `evals/results/*.jsonl` (gitignored), this file |
+| X1–X6 saved in evals/results; summarized here | ~ X1/X4/X6 saved (offline); X2/X3/X5 implemented, live numbers pending NIM key | `evals/results/*.jsonl` (gitignored), `tests/test_evals.py`, this file |
 | pytest zero network (except -m live); test_fast_tier_no_network.py enforces | ✓ | `conftest.py::_no_real_network`, `tests/test_fast_tier_no_network.py` |
 | `make check` passes | ✓ | 229 fast + ruff + mypy, ~6 s |
 | README, RUNBOOK, DESIGN_NOTES, A2A_PIN current | ✓ | this file; `docs/*` |
 | Every §15 entry has a test_regression.py guard + runbook section | ✓ | `tests/test_regression.py` (12 tests, one per promoted bug); RUNBOOK "Section 15 promotions" |
 
 Open items pending a NVIDIA NIM key (not in this environment):
-- X2 LLM-vs-fallback, X3 rationale on/off, X5 per-side models — `--mode live` is implemented and ready to run (`.venv/bin/python evals/run_evals.py --experiment x2 --mode live --runs 20`).
+- X2 LLM-vs-fallback, X3 rationale on/off, X5 per-side models — implemented with combined result files and per-run token counts; run each with `--mode live` (see the Evaluation results section).
 
 ## Status & known limitations
 
@@ -151,9 +163,9 @@ table-driven coverage of the R/G/C/S4 rows.
 Known limitations (accepted, documented in `docs/DESIGN_NOTES.md`):
 - negotiation is one-shot linear; no revision/branch support
 - `fallback_offer` cannot reason about the peer's utility (no bid-shading)
-- X2/X3/X5 live comparisons not yet run (need a NIM key); offline lattice
-  agreement rate is 1.00 by construction, so offline results don't show
-  "the LLM's edge"
+- X2/X3/X5 live comparisons not yet run (need a NIM key; the runner is
+  implemented and fails fast without one); offline lattice agreement rate
+  is 1.00 by construction, so offline results don't show "the LLM's edge"
 - `Decision`-level token accounting only covers the agents' own LLM calls;
   it does not capture R3/parse failures before a proposal is built
 - equal boulware deadlock is possible with symmetric curves at high betas

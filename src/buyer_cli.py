@@ -21,7 +21,13 @@ class AgreementMismatch(Exception):
     pass
 
 
-def _message_for(decision: Decision, task_id: str | None, context_id: str) -> dict[str, Any]:
+def _message_for(
+    decision: Decision,
+    task_id: str | None,
+    context_id: str,
+    *,
+    include_rationale: bool = True,
+) -> dict[str, Any]:
     assert decision.terms is not None
     data = {
         "type": "offer" if decision.kind == "offer" else "accept",
@@ -29,7 +35,7 @@ def _message_for(decision: Decision, task_id: str | None, context_id: str) -> di
         "round": decision.round,
     }
     parts: list[dict[str, Any]] = [protocol.data_part(data)]
-    if decision.rationale:
+    if include_rationale and decision.rationale:
         parts.append(protocol.text_part(decision.rationale))
     message: dict[str, Any] = {
         "messageId": str(uuid.uuid4()),
@@ -125,6 +131,7 @@ async def negotiate(
     buyer_store: BuyerStore | None = None,
     url: str | None = None,
     chat: Any | None = None,
+    include_rationale: bool = True,
 ) -> dict[str, Any]:
     agent_name = profile.name
     await client.fetch_card()
@@ -185,7 +192,9 @@ async def negotiate(
                 raise SendFailed("resend decision without a message")
             message = decision.message
         else:
-            message = _message_for(decision, task_id, context_id)
+            message = _message_for(
+                decision, task_id, context_id, include_rationale=include_rationale
+            )
 
         view = await client.send_message(message)
         task_id = view["id"]
