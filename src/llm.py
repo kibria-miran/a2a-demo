@@ -13,6 +13,8 @@ from typing import Any
 
 from src import config
 
+_MAX_TOKENS = 2048  # the free-tier reasoning model thinks before it answers; don't starve it
+
 REASON_LLM_ERROR = "LLM error"
 
 
@@ -98,6 +100,7 @@ def chat(
             model=selected_model,
             messages=messages,
             temperature=temperature,
+            max_tokens=_MAX_TOKENS,
         )
     except Exception as exc:  # SDK/network/timeout/non-2xx all become LLMError
         raise LLMError(f"LLM request failed: {type(exc).__name__}") from exc

@@ -59,12 +59,17 @@ EPS_BAND = 0.03
 # Timeouts, retries and polling (seconds unless stated otherwise)
 # ---------------------------------------------------------------------------
 
-LLM_TIMEOUT = 30.0
-BLOCKING_TIMEOUT = 45.0
-HTTP_TIMEOUT = 60.0
+LLM_TIMEOUT = float(os.getenv("A2A_LLM_TIMEOUT", "30.0"))
+BLOCKING_TIMEOUT = float(os.getenv("A2A_BLOCKING_TIMEOUT", "45.0"))
+HTTP_TIMEOUT = float(os.getenv("A2A_HTTP_TIMEOUT", "60.0"))
 MAX_RETRY_TOTAL = 15.0
-POLL_MAX = 60.0
+POLL_MAX = float(os.getenv("A2A_POLL_MAX", "60.0"))
 POLL_INTERVAL = 2.0
+
+# Optional per-deployment overrides of the frozen defaults:
+#   A2A_LLM_TIMEOUT, A2A_BLOCKING_TIMEOUT, A2A_HTTP_TIMEOUT, A2A_POLL_MAX
+# Defaults are the frozen v2.2 values; slow tier S14 relies on them.
+# Keep LLM_TIMEOUT < BLOCKING_TIMEOUT < HTTP_TIMEOUT if you override.
 
 LLM_TEMPERATURE = 0.3
 LLM_RETRY_ATTEMPTS = 1  # one retry after the first failure (D-13)

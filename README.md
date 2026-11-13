@@ -35,9 +35,12 @@ subprocess and live in the slow tier:
 
 One optional live test (`-m live`) runs a single real NIM negotiation when
 `NVIDIA_API_KEY` and `NIM_MODEL` are set in `.env`; it is skipped otherwise
-and is the only test allowed to bypass the offline network guard:
+and is the only test allowed to bypass the offline network guard. For slow
+free-tier models, pass the timing overrides inline (the slow tier needs the
+frozen defaults; keep overrides out of `.env`):
 
 ```bash
+A2A_LLM_TIMEOUT=120 A2A_BLOCKING_TIMEOUT=180 A2A_HTTP_TIMEOUT=240 A2A_POLL_MAX=300 \
 .venv/bin/python -m pytest -m live
 ```
 

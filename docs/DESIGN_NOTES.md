@@ -34,6 +34,26 @@ Diffs applied, restricted by E-55 to `src/config.py`, `src/protocol.py`
 No other plan section was revised during the pin. The spec is frozen at the
 hash recorded in `docs/A2A_PIN.md`; do not re-read it during the build.
 
+## Post-freeze: live hosted models and timeout overrides (2026-11-13)
+
+- `src/config.py` now reads `A2A_LLM_TIMEOUT`, `A2A_BLOCKING_TIMEOUT`,
+  `A2A_HTTP_TIMEOUT` and `A2A_POLL_MAX` from the environment. Defaults are the
+  frozen v2.2 values (30/45/60/60); the S14 slow test and
+  `test_config.py::test_timeout_ordering` both rely on the defaults and stay
+  deterministic. Per-deployment overrides exist because the frozen budgets are
+  hostile to slow free-tier hosted models (Nemotron Ultra measured 38-86 s per
+  proposer call) and were explicitly approved by the user for live runs.
+  Do NOT put the overrides in `.env` if you want the slow tier to stay at
+  frozen values; pass them inline on the command line instead (see README).
+- OpenRouter gate: `thinkingmachines/inkling-2-small:free` is only available on
+  approved agentic harnesses; direct API calls are refused (403). The key in
+  `.env` therefore points at `nvidia/nemotron-3-ultra-550b-a55b:free`. Free
+  tier rate limits (429) fire intermittently; the negotiation still completes
+  via the deterministic fallback by design (D-13).
+- `llm.chat()` caps responses at `_MAX_TOKENS = 2048` (the reasoning free-tier
+  model otherwise thinks past any small cap and returns an empty rationale
+  that fails to parse).
+
 ## Post-freeze implementation notes (2026-11)
 
 Decisions and bugs fixed after the v2.2 freeze, logged here per the changelog

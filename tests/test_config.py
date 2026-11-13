@@ -57,13 +57,30 @@ def test_epsilon_values() -> None:
     assert 0 <= config.EPS_BAND < 1
 
 
-def test_timeout_ordering() -> None:
-    assert config.LLM_TIMEOUT == 30.0
-    assert config.BLOCKING_TIMEOUT == 45.0
-    assert config.HTTP_TIMEOUT == 60.0
-    assert config.LLM_TIMEOUT < config.BLOCKING_TIMEOUT < config.HTTP_TIMEOUT
+def test_timeout_ordering(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Frozen v2.2 defaults are part of the contract, but config honors
+    # A2A_*_TIMEOUT env overrides for slow hosted models. Pin the env to
+    # the frozen defaults so this test is independent of any local .env.
+    frozen = {
+        "A2A_LLM_TIMEOUT": "30.0",
+        "A2A_BLOCKING_TIMEOUT": "45.0",
+        "A2A_HTTP_TIMEOUT": "60.0",
+        "A2A_POLL_MAX": "60.0",
+    }
+    for name, value in frozen.items():
+        monkeypatch.setenv(name, value)
+    import importlib
+
+    import src.config as reloaded
+
+    importlib.reload(reloaded)
+    assert reloaded.LLM_TIMEOUT == 30.0
+    assert reloaded.BLOCKING_TIMEOUT == 45.0
+    assert reloaded.HTTP_TIMEOUT == 60.0
+    assert reloaded.LLM_TIMEOUT < reloaded.BLOCKING_TIMEOUT < reloaded.HTTP_TIMEOUT
+    assert reloaded.POLL_MAX == 60.0
+    importlib.reload(reloaded)  # leave the rest of the session on frozen defaults
     assert config.MAX_RETRY_TOTAL == 15.0
-    assert config.POLL_MAX == 60.0
     assert config.POLL_INTERVAL == 2.0
 
 

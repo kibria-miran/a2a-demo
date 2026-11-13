@@ -27,6 +27,27 @@ make all               # pytest (fast + slow)
 `-m live` is the only marker allowed to reach an external host; `conftest.py`'s
 E-53 guard exempts live-marked tests and blocks everything else.
 `tests/test_live.py` runs one real NIM negotiation (skipped without a key).
+Run it with the frozen defaults when the model is fast, or with inline
+overrides when it is slow, e.g.:
+
+```bash
+A2A_LLM_TIMEOUT=120 A2A_BLOCKING_TIMEOUT=180 A2A_HTTP_TIMEOUT=240 A2A_POLL_MAX=300 \
+.venv/bin/python -m pytest -m live
+```
+
+Do NOT put the A2A_*_TIMEOUT overrides in `.env` — the S14 slow test depends
+on the frozen 30/45/60 budget for the fake-NIM sleeps. Pass them inline.
+
+Failure mode you will hit on free tiers: 429 rate limits are common and
+persist for minutes at a time. The agents call the LLM once per round; on
+429 both attempts fail and the deterministic fallback is sent (D-13), so the
+negotiation completes but `source` shows `fallback` on those turns. A 429 is
+indistinguishable in the trace from any other LLMError — check token counts
+and the `source` field per event, and don't assume the LLM proposed anything
+just because the negotiation completed.
+
+If a 429 keeps you from ever observing `source="llm"` on `-m live`, the
+endpoint is back to being free-tier rate-limited; retrying later is the fix.
 
 X2/X3/X5 need a real NIM key and are never part of `make check`:
 
