@@ -33,6 +33,14 @@ subprocess and live in the slow tier:
 .venv/bin/python -m pytest -m slow      # S9, S10a/S10b, S14  (~90 s)
 ```
 
+One optional live test (`-m live`) runs a single real NIM negotiation when
+`NVIDIA_API_KEY` and `NIM_MODEL` are set in `.env`; it is skipped otherwise
+and is the only test allowed to bypass the offline network guard:
+
+```bash
+.venv/bin/python -m pytest -m live
+```
+
 ## Run a negotiation (two terminals)
 
 ```bash

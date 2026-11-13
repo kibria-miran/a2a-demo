@@ -22,7 +22,11 @@ make slow              # pytest -m slow only (S9, S10, S14)
 make all               # pytest (fast + slow)
 ```
 
-## Live experiments (X2/X3/X5)
+## Live experiments (X2/X3/X5) and the `live` marker
+
+`-m live` is the only marker allowed to reach an external host; `conftest.py`'s
+E-53 guard exempts live-marked tests and blocks everything else.
+`tests/test_live.py` runs one real NIM negotiation (skipped without a key).
 
 X2/X3/X5 need a real NIM key and are never part of `make check`:
 

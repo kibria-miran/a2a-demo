@@ -23,13 +23,17 @@ from src import clock, config
 
 
 @pytest.fixture(autouse=True)
-def _no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+def _no_real_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     """E-53: no test may open a socket to a non-local host.
 
     Every test (fast and slow) runs under this guard; the slow tier is
     allowed to reach ``127.0.0.1`` for its real subprocesses. Any attempt
-    to reach a real external host (e.g. NIM) fails loudly.
+    to reach a real external host (e.g. NIM) fails loudly — except for
+    tests marked ``-m live``, which opt out of the guard entirely.
     """
+
+    if request.node.get_closest_marker("live") is not None:
+        return
 
     real_connect = socket.socket.connect
 
